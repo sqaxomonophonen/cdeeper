@@ -230,10 +230,10 @@ int main(int argc, char** argv)
 				struct lvl_sector* sector = lvl_get_sector(&lvl, i);
 				float d = mouse_z * 8;
 				if (sector->usr & LVL_SELECTED_ZMINUS) {
-					sector->floor.plane.s[3] -= d;
+					sector->flat[0].plane.s[3] -= d;
 				}
 				if (sector->usr & LVL_SELECTED_ZPLUS) {
-					sector->ceiling.plane.s[3] += d;
+					sector->flat[1].plane.s[3] += d;
 				}
 			}
 		}
@@ -270,14 +270,14 @@ int main(int argc, char** argv)
 			glBegin(GL_LINES);
 			for (int i = 0; i < lvl.n_linedefs; i++) {
 				struct lvl_linedef* l = lvl_get_linedef(&lvl, i);
-				if (l->sidedef_left == -1 || l->sidedef_right == -1) {
+				if (l->sidedef[0] == -1 || l->sidedef[1] == -1) {
 					glColor4f(1,1,1,1);
 				} else {
 					glColor4f(0,0.6,0.6,1);
 				}
-				struct vec2* v0 = lvl_get_vertex(&lvl, l->vertex0);
-				struct vec2* v1 = lvl_get_vertex(&lvl, l->vertex1);
+				struct vec2* v0 = lvl_get_vertex(&lvl, l->vertex[0]);
 				glVertex2f(v0->s[0], v0->s[1]);
+				struct vec2* v1 = lvl_get_vertex(&lvl, l->vertex[1]);
 				glVertex2f(v1->s[0], v1->s[1]);
 			}
 			glEnd();

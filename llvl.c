@@ -86,11 +86,11 @@ static void read_vertices(lua_State* L, struct lvl* lvl, const char* name)
 		struct vec2* v = lvl_get_vertex(lvl, vi);
 
 		lua_rawgeti(L, -1, 1);
-		v->s[0] = lua_tonumber(L, -1);
+		v->s[0] = lua_tointeger(L, -1);
 		lua_pop(L, 1);
 
 		lua_rawgeti(L, -1, 2);
-		v->s[1] = lua_tonumber(L, -1);
+		v->s[1] = lua_tointeger(L, -1);
 		lua_pop(L, 1);
 
 		//lua_pushnumber(L, vi);
@@ -101,20 +101,21 @@ static void read_vertices(lua_State* L, struct lvl* lvl, const char* name)
 	lua_pop(L, 1);
 }
 
-static void read_flat(lua_State* L, struct lvl_flat* flat, const char* k)
+static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 {
-	lua_getfield(L, -1, k);
-	if (!lua_istable(L, -1)) arghf("expected \"%s\" to be a table in flat", k);
+	lua_getfield(L, -1, "flat");
+	if (!lua_istable(L, -1)) arghf("expected \"flat\" to be a table");
+	lua_rawgeti(L, -1, index+1);
+	if (!lua_istable(L, -1)) arghf("expected flat[%d] to be a table", index+1);
 	lua_getfield(L, -1, "plane");
-	if (!lua_istable(L, -1)) arghf("expected [\"%s\"][\"plane\"] to be a table in flat", k);
+	if (!lua_istable(L, -1)) arghf("expected [\"flat\"][%d][\"plane\"] to be a table in flat", index+1);
 	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
 	for (int i = 0; i < 4; i++) {
 		lua_rawgeti(L, -1, i+1);
-		flat->plane.s[i] = lua_tonumber(L, -1);
+		sector->flat[index].plane.s[i] = lua_tointeger(L, -1);
 		lua_pop(L, 1);
 	}
-
-	lua_pop(L, 2);
+	lua_pop(L, 3);
 }
 
 static void read_sectors(lua_State* L, struct lvl* lvl, const char* name)
@@ -129,12 +130,7 @@ static void read_sectors(lua_State* L, struct lvl* lvl, const char* name)
 
 		uint32_t seci = lvl_new_sector(lvl);
 		struct lvl_sector* sec = lvl_get_sector(lvl, seci);
-
-		read_flat(L, &sec->floor, "floor");
-		read_flat(L, &sec->ceiling, "ceiling");
-
-		//lua_pushnumber(L, seci);
-		//lua_setfield(L, -2, "i");
+		for (int i = 0; i < 2; i++) read_flat(L, sec, i);
 
 		lua_pop(L, 1);
 	}
@@ -156,13 +152,8 @@ static void read_sidedefs(lua_State* L, struct lvl* lvl, const char* name)
 		struct lvl_sidedef* sd = lvl_get_sidedef(lvl, sdi);
 
 		lua_getfield(L, -1, "sector");
-		//lua_getfield(L, -1, "i");
-		sd->sector = lua_tonumber(L, -1) - 1;
+		sd->sector = lua_tointeger(L, -1) - 1;
 		lua_pop(L, 1);
-		//lua_pop(L, 2);
-
-		//lua_pushnumber(L, sdi);
-		//lua_setfield(L, -2, "i");
 
 		lua_pop(L, 1);
 	}
@@ -181,46 +172,29 @@ static void read_linedefs(lua_State* L, struct lvl* lvl, const char* name)
 		lua_rawgeti(L, -1, i);
 		if (!lua_istable(L, -1)) arghf("expected r[\"linedefs\"][%d] to be a table in '%s'", i, name);
 
-		uint32_t ldi = lvl_new_linedef(lvl);
-		struct lvl_linedef* ld = lvl_get_linedef(lvl, ldi);
+		struct lvl_linedef* ld = lvl_get_linedef(lvl, lvl_new_linedef(lvl));
 
-		lua_getfield(L, -1, "vertex0");
-		//lua_getfield(L, -1, "i");
-		ld->vertex0 = lua_tonumber(L, -1) - 1;
-		//lua_pop(L, 2);
-		lua_pop(L, 1);
-
-		lua_getfield(L, -1, "vertex1");
-		//lua_getfield(L, -1, "i");
-		ld->vertex1 = lua_tonumber(L, -1) - 1;
-		//lua_pop(L, 2);
-		lua_pop(L, 1);
-
-		lua_getfield(L, -1, "sidedef_left");
-		if (lua_isnil(L, -1)) {
-			ld->sidedef_left = -1;
-			lua_pop(L, 1);
-		} else {
-			//lua_getfield(L, -1, "i");
-			ld->sidedef_left = lua_tonumber(L, -1) - 1;
-			//lua_pop(L, 2);
+		lua_getfield(L, -1, "vertex");
+		if (!lua_istable(L, -1)) arghf("expected r[\"linedefs\"][%d][\"vertex\"] to be a table in '%s'", i, name);
+		for (int j = 0; j < 2; j++) {
+			lua_rawgeti(L, -1, j+1);
+			ld->vertex[j] = lua_tointeger(L, -1) - 1;
 			lua_pop(L, 1);
 		}
+		lua_pop(L, 1);
 
-		lua_getfield(L, -1, "sidedef_right");
-		if (lua_isnil(L, -1)) {
-			ld->sidedef_right = -1;
-			lua_pop(L, 1);
-		} else {
-			//lua_getfield(L, -1, "i");
-			ld->sidedef_right = lua_tonumber(L, -1) - 1;
-			//lua_pop(L, 2);
+		lua_getfield(L, -1, "sidedef");
+		if (!lua_istable(L, -1)) arghf("expected r[\"linedefs\"][%d][\"sidedef\"] to be a table in '%s'", i, name);
+		for (int j = 0; j < 2; j++) {
+			lua_rawgeti(L, -1, j+1);
+			if (lua_isnil(L, -1)) {
+				ld->sidedef[j] = -1;
+			} else {
+				ld->sidedef[j] = lua_tointeger(L, -1) - 1;
+			}
 			lua_pop(L, 1);
 		}
-
-		// NOTE redundant, just adding it for completeness
-		//lua_pushnumber(L, ldi);
-		//lua_setfield(L, -2, "i");
+		lua_pop(L, 1);
 
 		lua_pop(L, 1);
 	}
@@ -254,19 +228,22 @@ void llvl_load(const char* name, struct lvl* lvl)
 	lua_close(L);
 }
 
-static void write_flat(lua_State* L, struct lvl_flat* flat, const char* k)
+static void write_flat(lua_State* L, struct lvl_sector* sector, int index)
 {
-	lua_getfield(L, -1, k);
-	if (!lua_istable(L, -1)) arghf("expected \"%s\" to be a table in flat", k);
+	lua_getfield(L, -1, "flat");
+	if (!lua_istable(L, -1)) arghf("expected [\"flat\"] to be a table");
+	lua_rawgeti(L, -1, index+1);
+	if (!lua_istable(L, -1)) arghf("expected [\"flat\"][%d] to be a table", index+1);
 	lua_getfield(L, -1, "plane");
-	if (!lua_istable(L, -1)) arghf("expected [\"%s\"][\"plane\"] to be a table in flat", k);
+	if (!lua_istable(L, -1)) arghf("expected [\"flat\"][%d][\"plane\"] to be a table in flat", index+1);
+
 	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
 	for (int i = 0; i < 4; i++) {
-		lua_pushnumber(L, flat->plane.s[i]);
+		lua_pushnumber(L, sector->flat[index].plane.s[i]);
 		lua_rawseti(L, -2, i+1);
 	}
 
-	lua_pop(L, 2);
+	lua_pop(L, 3);
 }
 
 
@@ -280,8 +257,7 @@ static void write_sectors(lua_State* L, struct lvl* lvl)
 		lua_rawgeti(L, -1, i+1);
 		if (!lua_istable(L, -1)) arghf("expected r[\"sectors\"][%d] to be a table", i+1);
 
-		write_flat(L, &sector->floor, "floor");
-		write_flat(L, &sector->ceiling, "ceiling");
+		for (int i = 0; i < 2; i++) write_flat(L, sector, i);
 
 		lua_pop(L, 1);
 	}

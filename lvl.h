@@ -16,17 +16,16 @@ struct lvl_flat {
 };
 
 struct lvl_sector {
-	struct lvl_flat floor;
-	struct lvl_flat ceiling;
+	struct lvl_flat flat[2];
+
 	//float light_level;
 	uint32_t usr;
 	int32_t contour0, contourn; // (derived)
 };
 
 struct lvl_linedef {
-	// XXX TODO make these arrays? deserves all the xor glory
-	int32_t vertex0, vertex1;
-	int32_t sidedef_left, sidedef_right;
+	int32_t vertex[2];
+	int32_t sidedef[2];
 	uint32_t usr;
 	//uint32_t flags;
 };
@@ -41,7 +40,7 @@ struct lvl_sidedef {
 
 struct lvl_contour {
 	uint32_t linedef;
-	uint32_t data;
+	uint32_t usr;
 };
 
 struct lvl {

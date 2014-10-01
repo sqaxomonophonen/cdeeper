@@ -73,8 +73,8 @@ struct lvl_sector* lvl_get_sector(struct lvl* lvl, int32_t i)
 
 static void lvl_linedef_init(struct lvl_linedef* linedef)
 {
-	linedef->vertex0 = linedef->vertex1 = -1;
-	linedef->sidedef_left = linedef->sidedef_right = -1;
+	linedef->vertex[0] = linedef->vertex[1] = -1;
+	linedef->sidedef[0] = linedef->sidedef[1] = -1;
 	linedef->usr = 0;
 }
 
@@ -137,46 +137,30 @@ static struct lvl_contour* lvl_get_contour(struct lvl* lvl, int32_t i)
 }
 
 
-static void add_contour(struct lvl* lvl, uint32_t linedef, uint32_t data)
+static void add_contour(struct lvl* lvl, uint32_t linedef, uint32_t usr)
 {
 	ASSERT((lvl->n_contours + 1) < lvl->reserved_contours);
 	int32_t i = lvl->n_contours++;
 	struct lvl_contour* contour = lvl_get_contour(lvl, i);
 	contour->linedef = linedef;
-	contour->data = data;
+	contour->usr = usr;
 }
-
-#define LVL_CONTOUR_LEFT (1)
-#define LVL_CONTOUR_RIGHT (2)
-#define LVL_CONTOUR_NON (3)
-
-#define LVL_CONTOUR_IS_LEFT(c) ((c->data & 3) == 1)
-#define LVL_CONTOUR_IS_RIGHT(c) ((c->data & 3) == 2)
-#define LVL_CONTOUR_IS_NON(c) ((c->data & 3) == 3)
 
 static struct lvl* GLOBAL_lvl;
 static uint32_t vcntr_resolve_sector(const void* vcntr)
 {
-	struct lvl_contour* cntr = (struct lvl_contour*) vcntr;
-	struct lvl_linedef* ld = lvl_get_linedef(GLOBAL_lvl, cntr->linedef);
-	uint32_t sdi = (LVL_CONTOUR_IS_LEFT(cntr) || LVL_CONTOUR_IS_NON(cntr)) ? ld->sidedef_left : LVL_CONTOUR_IS_RIGHT(cntr) ? ld->sidedef_right : -1;
+	struct lvl_contour* c = (struct lvl_contour*) vcntr;
+	struct lvl_linedef* ld = lvl_get_linedef(GLOBAL_lvl, c->linedef);
+	uint32_t sdi = ld->sidedef[c->usr & 1];
 	ASSERT(sdi != -1);
 	struct lvl_sidedef* sd = lvl_get_sidedef(GLOBAL_lvl, sdi);
 	ASSERT(sd->sector != -1);
 	return sd->sector;
 }
 
-static int vcntr_is_non(const void* vcntr)
-{
-	struct lvl_contour* cntr = (struct lvl_contour*) vcntr;
-	return LVL_CONTOUR_IS_NON(cntr) ? 1 : 0;
-}
-
 static int vcntr_cmp(const void* vcntr0, const void* vcntr1)
 {
-	int cmp = vcntr_resolve_sector(vcntr0) - vcntr_resolve_sector(vcntr1);
-	if (cmp != 0) return cmp;
-	return vcntr_is_non(vcntr0) - vcntr_is_non(vcntr1);
+	return vcntr_resolve_sector(vcntr0) - vcntr_resolve_sector(vcntr1);
 }
 
 static void lvl_swap_contours(struct lvl* lvl, int32_t i0, int32_t i1)
@@ -187,12 +171,10 @@ static void lvl_swap_contours(struct lvl* lvl, int32_t i0, int32_t i1)
 	memcpy(lvl_get_contour(lvl, i1), &tmp, sizeof(struct lvl_contour));
 }
 
-#define CONTOURS_CW (1)
-#define SELECT_VERTEX(linedef, p) ((p) ? (linedef)->vertex1 : (linedef)->vertex0)
-#define MARK_CONTOUR_FIRST(c) (c->data |= 4)
-#define CONTOUR_IS_FIRST(c) (c->data & 4)
-#define MARK_CONTOUR_LAST(c) (c->data |= 8)
-#define CONTOUR_IS_LAST(c) (c->data & 8)
+#define MARK_CONTOUR_FIRST(c) (c->usr |= 2)
+#define CONTOUR_IS_FIRST(c) (c->usr & 2)
+#define MARK_CONTOUR_LAST(c) (c->usr |= 4)
+#define CONTOUR_IS_LAST(c) (c->usr & 4)
 
 void lvl_build_contours(struct lvl* lvl)
 {
@@ -207,15 +189,12 @@ void lvl_build_contours(struct lvl* lvl)
 
 	for (int i = 0; i < lvl->n_linedefs; i++) {
 		struct lvl_linedef* linedef = lvl_get_linedef(lvl, i);
-		ASSERT(linedef->sidedef_left != -1 || linedef->sidedef_right != -1);
-		int32_t sleft = (linedef->sidedef_left == -1) ? -1 : lvl_get_sidedef(lvl, linedef->sidedef_left)->sector;
-		int32_t sright = (linedef->sidedef_right == -1) ? -1 : lvl_get_sidedef(lvl, linedef->sidedef_right)->sector;
-		ASSERT(sleft != -1 || sright != -1);
-		if (sleft == sright) {
-			add_contour(lvl, i, LVL_CONTOUR_NON);
-		} else {
-			if (sleft != -1) add_contour(lvl, i, LVL_CONTOUR_LEFT);
-			if (sright != -1) add_contour(lvl, i, LVL_CONTOUR_RIGHT);
+		ASSERT(linedef->sidedef[0] != -1 || linedef->sidedef[1] != -1);
+		for (int side = 0; side < 2; side++) {
+			int32_t s = linedef->sidedef[side] == -1 ? -1 : lvl_get_sidedef(lvl, linedef->sidedef[side])->sector;
+			if (s != -1) {
+				add_contour(lvl, i, side);
+			}
 		}
 	}
 
@@ -230,14 +209,8 @@ void lvl_build_contours(struct lvl* lvl)
 	int32_t s0 = -1;
 	for (int i = 0; i < lvl->n_contours; i++) {
 		struct lvl_contour* c = lvl_get_contour(lvl, i);
-		if (LVL_CONTOUR_IS_NON(c)) continue;
 		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-		int sec = -1;
-		if (LVL_CONTOUR_IS_LEFT(c)) {
-			sec = lvl_get_sidedef(lvl, l->sidedef_left)->sector;
-		} else if(LVL_CONTOUR_IS_RIGHT(c)) {
-			sec = lvl_get_sidedef(lvl, l->sidedef_right)->sector;
-		}
+		int sec = lvl_get_sidedef(lvl, l->sidedef[c->usr&1])->sector;
 		ASSERT(sec != -1);
 		if (sec > s0) {
 			lvl_get_sector(lvl, sec)->contour0 = i;
@@ -254,52 +227,32 @@ void lvl_build_contours(struct lvl* lvl)
 		if (c0i == lvl->n_contours) break;
 
 		struct lvl_contour* c0 = lvl_get_contour(lvl, c0i);
-		if (LVL_CONTOUR_IS_NON(c0)) {
-			c0i++;
-			continue;
-		}
-
 		struct lvl_linedef* l0 = lvl_get_linedef(lvl, c0->linedef);
-		int32_t sec0 = -1;
-		int32_t vcurrent = -1;
+		int32_t sec0 = lvl_get_sidedef(lvl, l0->sidedef[c0->usr&1])->sector;
+		int32_t vcurrent = l0->vertex[(c0->usr&1)^1];
 		if (vend == -1) {
 			MARK_CONTOUR_FIRST(c0);
+			vend = l0->vertex[c0->usr&1];
 		}
-		if (LVL_CONTOUR_IS_LEFT(c0)) {
-			sec0 = lvl_get_sidedef(lvl, l0->sidedef_left)->sector;
-			vcurrent = SELECT_VERTEX(l0, CONTOURS_CW);
-			if (vend == -1) vend = SELECT_VERTEX(l0, !CONTOURS_CW);
-		} else if (LVL_CONTOUR_IS_RIGHT(c0)) {
-			sec0 = lvl_get_sidedef(lvl, l0->sidedef_right)->sector;
-			vcurrent = SELECT_VERTEX(l0, !CONTOURS_CW);
-			if (vend == -1) vend = SELECT_VERTEX(l0, CONTOURS_CW);
-		}
+
 		ASSERT(sec0 != -1);
 		ASSERT(vcurrent != -1);
 		ASSERT(vend != -1);
 
 		int32_t c1i0 = c0i + 1;
 		int32_t c1i = c1i0;
+
 		while (1) {
 			ASSERT(c1i <= lvl->n_contours);
 			if (c1i == lvl->n_contours) break;
 
 			struct lvl_contour* c1 = lvl_get_contour(lvl, c1i);
-			if (LVL_CONTOUR_IS_NON(c1)) break;
-
 			struct lvl_linedef* l1 = lvl_get_linedef(lvl, c1->linedef);
-			int32_t sec1 = -1;
-			int32_t vjoin = -1;
-			int32_t vopposite = -1;
-			if (LVL_CONTOUR_IS_LEFT(c1)) {
-				sec1 = lvl_get_sidedef(lvl, l1->sidedef_left)->sector;
-				vjoin = SELECT_VERTEX(l1, !CONTOURS_CW);
-				vopposite = SELECT_VERTEX(l1, CONTOURS_CW);
-			} else if (LVL_CONTOUR_IS_RIGHT(c1)) {
-				sec1 = lvl_get_sidedef(lvl, l1->sidedef_right)->sector;
-				vjoin = SELECT_VERTEX(l1, CONTOURS_CW);
-				vopposite = SELECT_VERTEX(l1, !CONTOURS_CW);
-			}
+
+			int32_t sec1 = lvl_get_sidedef(lvl, l1->sidedef[c1->usr&1])->sector;
+			int32_t vjoin = l1->vertex[c1->usr&1];
+			int32_t vopposite = l1->vertex[(c1->usr&1)^1];
+
 			ASSERT(sec1 != -1);
 			ASSERT(vjoin != -1);
 			ASSERT(vopposite != -1);
@@ -308,10 +261,8 @@ void lvl_build_contours(struct lvl* lvl)
 
 			if (vcurrent == vjoin) {
 				// next in loop
-				// XXX printf("%d <=> %d (vend=%d)\n", c1i, c1i0, vend);
 				if (vopposite == vend) {
 					// the loop is complete
-					// XXX printf("LOOPSIE\n");
 					MARK_CONTOUR_LAST(c1);
 					vend = -1;
 					c0i++;
@@ -329,57 +280,7 @@ void lvl_build_contours(struct lvl* lvl)
 	}
 }
 
-/*
-static void lvl_sector_draw_lines_partial(struct lvl* lvl, int32_t sectori, int top)
-{
-	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-	int32_t ci = sector->contour0;
-
-	float y = top ? sector->ceiling.plane.s[3] : sector->floor.plane.s[3];
-
-	int begun = 0;
-	while (1) {
-		if (ci >= lvl->n_contours) break;
-		struct lvl_contour* c = lvl_get_contour(lvl, ci);
-
-		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-		struct vec2* v = NULL;
-		int32_t s1 = -1;
-		if (LVL_CONTOUR_IS_LEFT(c)) {
-			v = lvl_get_vertex(lvl, l->vertex0);
-			s1 = lvl_get_sidedef(lvl, l->sidedef_left)->sector;
-		} else if (LVL_CONTOUR_IS_RIGHT(c)) {
-			v = lvl_get_vertex(lvl, l->vertex1);
-			s1 = lvl_get_sidedef(lvl, l->sidedef_right)->sector;
-		}
-		AN(v);
-		ASSERT(s1 != -1);
-		if (s1 != sectori) break;
-
-		if (CONTOUR_IS_FIRST(c)) {
-			//printf("BEGIN\n");
-			glBegin(GL_LINE_LOOP);
-			AZ(begun);
-			begun = 1;
-		}
-
-		glVertex3f(v->s[0], y, v->s[1]);
-		//printf("   VERTEX\n");
-
-		if (CONTOUR_IS_LAST(c)) {
-			//printf("END\n");
-			glEnd();
-			AN(begun);
-			begun = 0;
-		}
-
-
-		ci++;
-	}
-}
-*/
-
-static void lvl_sector_draw_lines_partial(struct lvl* lvl, int32_t sectori, int top)
+static void lvl_sector_draw_lines_partial(struct lvl* lvl, int32_t sectori, int flati)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 	struct vec2* vlast = NULL;
@@ -391,16 +292,11 @@ static void lvl_sector_draw_lines_partial(struct lvl* lvl, int32_t sectori, int 
 		struct lvl_contour* c = lvl_get_contour(lvl, ci);
 
 		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-		struct vec2* v = NULL;
-		if (LVL_CONTOUR_IS_LEFT(c)) {
-			v = lvl_get_vertex(lvl, l->vertex0);
-		} else if (LVL_CONTOUR_IS_RIGHT(c)) {
-			v = lvl_get_vertex(lvl, l->vertex1);
-		}
+		struct vec2* v = lvl_get_vertex(lvl, l->vertex[c->usr&1]);
 		AN(v);
 
 		if (vlast != NULL) {
-			struct plane* plane = top ? &sector->ceiling.plane : &sector->floor.plane;
+			struct plane* plane = &sector->flat[flati].plane;
 			float zlast = plane_z(plane, vlast);
 			float z = plane_z(plane, v);
 			glBegin(GL_LINES);
@@ -428,13 +324,11 @@ static void lvl_sector_draw_lines_partial(struct lvl* lvl, int32_t sectori, int 
 
 void lvl_sector_draw_lines(struct lvl* lvl, int32_t sectori)
 {
-	//printf("==%d==\n", sectori);
 	lvl_sector_draw_lines_partial(lvl, sectori, 0);
 	lvl_sector_draw_lines_partial(lvl, sectori, 1);
-	//printf("=====\n");
 }
 
-static void lvl_sector_draw_flat_partial(struct lvl* lvl, int32_t sectori, int top)
+static void lvl_sector_draw_flat_partial(struct lvl* lvl, int32_t sectori, int flati)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 
@@ -468,12 +362,7 @@ static void lvl_sector_draw_flat_partial(struct lvl* lvl, int32_t sectori, int t
 		struct lvl_contour* c = lvl_get_contour(lvl, ci);
 
 		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-		struct vec2* v = NULL;
-		if (LVL_CONTOUR_IS_LEFT(c)) {
-			v = lvl_get_vertex(lvl, SELECT_VERTEX(l, !CONTOURS_CW));
-		} else if (LVL_CONTOUR_IS_RIGHT(c)) {
-			v = lvl_get_vertex(lvl, SELECT_VERTEX(l, CONTOURS_CW));
-		}
+		struct vec2* v = lvl_get_vertex(lvl, l->vertex[c->usr&1]);
 		AN(v);
 
 		if (CONTOUR_IS_FIRST(c)) {
@@ -511,16 +400,15 @@ static void lvl_sector_draw_flat_partial(struct lvl* lvl, int32_t sectori, int t
 		const int* p = &elems[i * nvp];
 		for (int j = 0; j < nvp; j++) {
 			ASSERT(p[j] != TESS_UNDEF);
-			int k = top ? nvp - 1 - j : j;
+			int k = flati ? nvp - 1 - j : j;
 			struct vec2 v;
-			struct plane* plane = top ? &sector->ceiling.plane : &sector->floor.plane;
+			struct plane* plane = &sector->flat[flati].plane;
 			v.s[0] = verts[p[k]*2];
 			v.s[1] = verts[p[k]*2+1];
 			float z = plane_z(plane, &v);
 			glVertex3f(v.s[0], z, v.s[1]);
 		}
 		glEnd();
-		//glEnd();
 	}
 
 	tessDeleteTess(t);
@@ -570,26 +458,14 @@ static void lvl_sector_draw_walls(struct lvl* lvl, int32_t sectori)
 		struct lvl_contour* c = lvl_get_contour(lvl, ci);
 		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
 
-		struct lvl_sidedef* sd = NULL;
-		struct lvl_sidedef* sopp = NULL;
-		struct vec2* v0 = NULL;
-		struct vec2* v1 = NULL;
-		if (LVL_CONTOUR_IS_LEFT(c)) {
-			v0 = lvl_get_vertex(lvl, l->vertex0);
-			v1 = lvl_get_vertex(lvl, l->vertex1);
-			sd = l->sidedef_left == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef_left);
-			sopp = l->sidedef_right == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef_right);
-		} else if (LVL_CONTOUR_IS_RIGHT(c)) {
-			v0 = lvl_get_vertex(lvl, l->vertex1);
-			v1 = lvl_get_vertex(lvl, l->vertex0);
-			sd = l->sidedef_right == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef_right);
-			sopp = l->sidedef_left == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef_left);
-		} else {
-			continue; // TODO NONs?
-		}
-		AN(sd);
+		struct vec2* v0 = lvl_get_vertex(lvl, l->vertex[c->usr&1]);
+		struct vec2* v1 = lvl_get_vertex(lvl, l->vertex[(c->usr&1)^1]);
+		struct lvl_sidedef* sd = l->sidedef[c->usr&1] == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef[c->usr&1]);
+		struct lvl_sidedef* sopp = l->sidedef[(c->usr&1)^1] == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef[(c->usr&1)^1]);
+
 		AN(v0);
 		AN(v1);
+		AN(sd);
 
 		struct vec2 vd;
 		vec2_sub(&vd, v1, v0);
@@ -603,10 +479,10 @@ static void lvl_sector_draw_walls(struct lvl* lvl, int32_t sectori)
 
 		if (sopp == NULL) {
 			// one-sided
-			float z0 = plane_z(&sector->ceiling.plane, v0);
-			float z1 = plane_z(&sector->ceiling.plane, v1);
-			float z2 = plane_z(&sector->floor.plane, v1);
-			float z3 = plane_z(&sector->floor.plane, v0);
+			float z0 = plane_z(&sector->flat[1].plane, v0);
+			float z1 = plane_z(&sector->flat[1].plane, v1);
+			float z2 = plane_z(&sector->flat[0].plane, v1);
+			float z3 = plane_z(&sector->flat[0].plane, v0);
 
 			vec3_copy(&color, &stdcolor);
 			if ((sd->usr & LVL_HIGHLIGHTED_ZMINUS) || (sd->usr & LVL_HIGHLIGHTED_ZPLUS)) {
@@ -631,10 +507,10 @@ static void lvl_sector_draw_walls(struct lvl* lvl, int32_t sectori)
 			// two-sided
 			struct lvl_sector* sector1 = lvl_get_sector(lvl, sopp->sector);
 			{
-				float z0 = plane_z(&sector1->floor.plane, v0);
-				float z1 = plane_z(&sector1->floor.plane, v1);
-				float z2 = plane_z(&sector->floor.plane, v1);
-				float z3 = plane_z(&sector->floor.plane, v0);
+				float z0 = plane_z(&sector1->flat[0].plane, v0);
+				float z1 = plane_z(&sector1->flat[0].plane, v1);
+				float z2 = plane_z(&sector->flat[0].plane, v1);
+				float z3 = plane_z(&sector->flat[0].plane, v0);
 
 				if (z1 > z2 && z0 > z3) {
 					vec3_copy(&color, &stdcolor);
@@ -659,10 +535,10 @@ static void lvl_sector_draw_walls(struct lvl* lvl, int32_t sectori)
 				} // XXX else: crossing?
 			}
 			{
-				float z0 = plane_z(&sector1->ceiling.plane, v0);
-				float z1 = plane_z(&sector1->ceiling.plane, v1);
-				float z2 = plane_z(&sector->ceiling.plane, v1);
-				float z3 = plane_z(&sector->ceiling.plane, v0);
+				float z0 = plane_z(&sector1->flat[1].plane, v0);
+				float z1 = plane_z(&sector1->flat[1].plane, v1);
+				float z2 = plane_z(&sector->flat[1].plane, v1);
+				float z3 = plane_z(&sector->flat[1].plane, v0);
 
 				if (z1 < z2 && z0 < z3) {
 					vec3_copy(&color, &stdcolor);
@@ -710,12 +586,10 @@ int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
 		int ci = sector->contour0 + i;
 
 		struct lvl_contour* c = lvl_get_contour(lvl, ci);
-		if (LVL_CONTOUR_IS_NON(c)) continue;
-
 		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
 
-		struct vec2* v0 = lvl_get_vertex(lvl, l->vertex0);
-		struct vec2* v1 = lvl_get_vertex(lvl, l->vertex1);
+		struct vec2* v0 = lvl_get_vertex(lvl, l->vertex[0]);
+		struct vec2* v1 = lvl_get_vertex(lvl, l->vertex[1]);
 		struct vec2 vd;
 		vec2_sub(&vd, v1, v0);
 
@@ -813,14 +687,10 @@ void lvl_entity_mouse(struct lvl_entity* entity, struct vec3* pos, struct vec3* 
 
 static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, int32_t sectori, int32_t ci)
 {
-	//struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 	struct lvl_contour* c = lvl_get_contour(lvl, ci);
-
-	if (LVL_CONTOUR_IS_NON(c)) return;
-
 	struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-	struct vec2* v0 = lvl_get_vertex(lvl, l->vertex0);
-	struct vec2* v1 = lvl_get_vertex(lvl, l->vertex1);
+	struct vec2* v0 = lvl_get_vertex(lvl, l->vertex[0]);
+	struct vec2* v1 = lvl_get_vertex(lvl, l->vertex[1]);
 	struct vec2 vd;
 	vec2_sub(&vd, v1, v0);
 	struct vec2 vn;
@@ -870,7 +740,7 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 
 		// TODO sector height magick
 
-		if (l->sidedef_left == -1 || l->sidedef_right == -1) {
+		if (l->sidedef[0] == -1 || l->sidedef[1] == -1) {
 			impassable = 1;
 		}
 
@@ -920,7 +790,7 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2
 	// XXX updating z here, but that's not how all entities work (or eventually any)
 	if (entity->sector != -1) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, entity->sector);
-		struct plane* plane = &sector->floor.plane;
+		struct plane* plane = &sector->flat[0].plane;
 		float height = 48;
 		entity->z = plane_z(plane, &entity->p) + height;
 	}
@@ -964,11 +834,12 @@ int lvl_trace(
 			int32_t ci = sector->contour0 + i;
 			struct lvl_contour* c = lvl_get_contour(lvl, ci);
 			struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
-			struct vec2* v0 = lvl_get_vertex(lvl, ld->vertex0);
-			struct vec2* v1 = lvl_get_vertex(lvl, ld->vertex1);
+			struct vec2* v0 = lvl_get_vertex(lvl, ld->vertex[0]);
+			struct vec2* v1 = lvl_get_vertex(lvl, ld->vertex[1]);
 			struct vec2 vd;
 			vec2_sub(&vd, v1, v0);
-			if ((vec2_cross(&ray2, &vd) * (LVL_CONTOUR_IS_LEFT(c) ? -1 : LVL_CONTOUR_IS_RIGHT(c) ? 1 : 0)) < 0) continue;
+			if ((vec2_cross(&ray2, &vd) * ((c->usr&1) ? 1 : -1)) < 0) continue;
+
 			float rxs = vec2_cross(&ray2, &vd);
 			if (rxs == 0) continue;
 			struct vec2 qp;
@@ -982,7 +853,7 @@ int lvl_trace(
 					nt = t;
 					nc = c;
 					result->linedef = c->linedef;
-					result->sidedef = LVL_CONTOUR_IS_LEFT(c) ? ld->sidedef_left : LVL_CONTOUR_IS_RIGHT(c) ? ld->sidedef_right : -1;
+					result->sidedef = ld->sidedef[c->usr&1];
 					vec3_scale(&result->position, ray, t);
 					vec3_addi(&result->position, &origin);
 					n++;
@@ -994,10 +865,10 @@ int lvl_trace(
 		float pt = 0.0f;
 		int z = 0;
 		if (ray->s[2] > 0) {
-			pt = ray_plane_intersection(&plane_position, &origin, ray, &sector->ceiling.plane);
+			pt = ray_plane_intersection(&plane_position, &origin, ray, &sector->flat[1].plane);
 			z = 1;
 		} else if (ray->s[2] < 0) {
-			pt = ray_plane_intersection(&plane_position, &origin, ray, &sector->floor.plane);
+			pt = ray_plane_intersection(&plane_position, &origin, ray, &sector->flat[0].plane);
 			z = -1;
 		}
 		if (z != 0 && pt > 0 && (pt < nt || n == 0)) {
@@ -1022,31 +893,17 @@ int lvl_trace(
 
 		struct lvl_linedef* ld = lvl_get_linedef(lvl, nc->linedef);
 
-		uint32_t oppositei;
-		if (LVL_CONTOUR_IS_LEFT(nc)) {
-			if (ld->sidedef_right == -1) {
-				return 1;
-			} else {
-				struct lvl_sidedef* sd = lvl_get_sidedef(lvl, ld->sidedef_right);
-				oppositei = sd->sector;
-			}
-		} else if (LVL_CONTOUR_IS_RIGHT(nc)) {
-			if (ld->sidedef_left == -1) {
-				return 1;
-			} else {
-				struct lvl_sidedef* sd = lvl_get_sidedef(lvl, ld->sidedef_left);
-				oppositei = sd->sector;
-			}
-		} else {
-			AZ(1);
+		if (ld->sidedef[(nc->usr&1)^1] == -1) {
+			return 1;
 		}
 
+		uint32_t oppositei = lvl_get_sidedef(lvl, ld->sidedef[(nc->usr&1)^1])->sector;
 		struct lvl_sector* opposite = lvl_get_sector(lvl, oppositei);
 		struct vec2 hit;
 		vec3_to_vec2(&result->position, &hit);
 		float pz = result->position.s[2];
-		float z0 = plane_z(&opposite->floor.plane, &hit);
-		float z1 = plane_z(&opposite->ceiling.plane, &hit);
+		float z0 = plane_z(&opposite->flat[0].plane, &hit);
+		float z1 = plane_z(&opposite->flat[1].plane, &hit);
 
 		if (pz < z0) {
 			result->z = -1;
@@ -1090,7 +947,7 @@ void lvl_tag(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
 			int32_t ci = sector->contour0 + j;
 			struct lvl_contour* c = lvl_get_contour(lvl, ci);
 			struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
-			uint32_t sdi = LVL_CONTOUR_IS_LEFT(c) ? ld->sidedef_left : LVL_CONTOUR_IS_RIGHT(c) ? ld->sidedef_right : -1;
+			uint32_t sdi = ld->sidedef[c->usr&1];
 			ASSERT(sdi != -1);
 
 			struct lvl_sidedef* sd = lvl_get_sidedef(lvl, sdi);

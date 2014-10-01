@@ -154,8 +154,8 @@ function mouse_linedef(bag)
 	local nsd = nil
 	local ni = nil
 	for i,ld in ipairs(bag.brick.linedefs) do
-		local v0 = bag.tx:apply(bag.brick.vertices[ld.vertex0])
-		local v1 = bag.tx:apply(bag.brick.vertices[ld.vertex1])
+		local v0 = bag.tx:apply(bag.brick.vertices[ld.vertex[1]])
+		local v1 = bag.tx:apply(bag.brick.vertices[ld.vertex[2]])
 		local len = (v1-v0):length()
 		local vd = (v1-v0):normalize()
 		local dw = bag.mouse - v0
@@ -189,7 +189,7 @@ function mouse_sector(bag)
 	local sector_linedefs = {}
 	for i,ld in ipairs(bag.brick.linedefs) do
 		for _,side in ipairs{-1,1} do
-			local sd = bag.brick.sidedefs[ld[linedefside(side)]]
+			local sd = bag.brick.sidedefs[ld.sidedef[linedefside(side)]]
 			if sd and sd.sector then
 				if not sector_linedefs[sd.sector] then
 					sector_linedefs[sd.sector] = {}
@@ -202,8 +202,8 @@ function mouse_sector(bag)
 	for sector,linedefs in ipairs(sector_linedefs) do
 		local intersections = 0
 		for ld,_ in pairs(linedefs) do
-			local v0 = bag.brick.vertices[ld.vertex0]
-			local v1 = bag.brick.vertices[ld.vertex1]
+			local v0 = bag.brick.vertices[ld.vertex[1]]
+			local v1 = bag.brick.vertices[ld.vertex[2]]
 			local vd = v1-v0
 			local rxs = dir:cross(vd)
 			if rxs ~= 0 then
@@ -286,37 +286,39 @@ function insert_vertex(brick, p)
 	return #brick.vertices
 end
 
-function insert_linedef(brick, vertex0, vertex1)
+function insert_linedef(brick, v1, v2)
 	for i,ld in ipairs(brick.linedefs) do
-		if (ld.vertex0 == vertex0 and ld.vertex1 == vertex1) or (ld.vertex0 == vertex1 and ld.vertex1 == vertex0) then
+		if (ld.vertex[1] == v1 and ld.vertex[2] == v2) or (ld.vertex[1] == v2 and ld.vertex[2] == v1) then
 			return i
 		end
 	end
-	local linedef = { vertex0 = vertex0, vertex1 = vertex1 }
+	local linedef = { vertex = {v1, v2}, sidedef = {} }
 	table.insert(brick.linedefs, linedef)
 	return #brick.linedefs
 end
 
 function linedefside(side)
-	return side > 0 and "sidedef_right" or "sidedef_left"
+	return side > 0 and 2 or 1
 end
 
 function insert_sidedef(brick, linedef, side)
 	local ld = brick.linedefs[linedef]
 	local lds = linedefside(side)
-	local sd = ld[lds]
+	local sd = ld.sidedef[lds]
 	if sd then return sd end
 	local sidedef = {}
 	table.insert(brick.sidedefs, sidedef)
 	local i = #brick.sidedefs
-	ld[lds] = i
+	ld.sidedef[lds] = i
 	return i
 end
 
 function insert_sector(brick)
 	local sector = {
-		floor = {plane={0,0,1,64}},
-		ceiling = {plane={0,0,-1,64}}
+		flat = {
+			{plane={0,0,1,64}},
+			{plane={0,0,-1,64}}
+		}
 	}
 	table.insert(brick.sectors, sector)
 	return #brick.sectors
@@ -352,8 +354,8 @@ end
 
 function delete_linedef(brick, to_delete)
 	local ld = brick.linedefs[to_delete]
-	if ld.sidedef_left then delete_sidedef(brick, ld.sidedef_left) end
-	if ld.sidedef_right then delete_sidedef(brick, ld.sidedef_right) end
+	if ld.sidedef[1] then delete_sidedef(brick, ld.sidedef[1]) end
+	if ld.sidedef[2] then delete_sidedef(brick, ld.sidedef[2]) end
 	brick.linedefs[to_delete] = false
 end
 
@@ -361,7 +363,7 @@ function delete_vertex(brick, to_delete)
 	brick.vertices[to_delete] = false
 	for i = 1,#brick.linedefs do
 		local ld = brick.linedefs[i]
-		if ld and (not brick.vertices[ld.vertex0] or not brick.vertices[ld.vertex1]) then
+		if ld and (not brick.vertices[ld.vertex[1]] or not brick.vertices[ld.vertex[2]]) then
 			delete_linedef(brick, i)
 		end
 	end
@@ -406,11 +408,11 @@ function remap(brick)
 	for i = 1,#brick.linedefs do
 		local ld = brick.linedefs[i]
 		if ld then
-			ld.vertex0 = vremap[ld.vertex0]
-			ld.vertex1 = vremap[ld.vertex1]
+			ld.vertex[1] = vremap[ld.vertex[1]]
+			ld.vertex[2] = vremap[ld.vertex[2]]
 			table.insert(nld, ld)
-			ld.sidedef_left = sdremap[ld.sidedef_left]
-			ld.sidedef_right = sdremap[ld.sidedef_right]
+			ld.sidedef[1] = sdremap[ld.sidedef[1]]
+			ld.sidedef[2] = sdremap[ld.sidedef[2]]
 		end
 	end
 	brick.linedefs = nld
@@ -567,7 +569,7 @@ linedef = {
 		end
 		for i,ld in ipairs(bag.brick.linedefs) do
 			if not toggled[i] then
-				if vertices[ld.vertex0] and vertices[ld.vertex1] then
+				if vertices[ld.vertex[1]] and vertices[ld.vertex[2]] then
 					selection:toggle_one(i)
 					toggled[i] = true
 				end
@@ -579,8 +581,8 @@ linedef = {
 		local vs = {}
 		for _,i in ipairs(selection.selected) do
 			local ld = brick.linedefs[i]
-			vs[ld.vertex0] = true
-			vs[ld.vertex1] = true
+			vs[ld.vertex[1]] = true
+			vs[ld.vertex[2]] = true
 		end
 		local vsi = {}
 		for k,_ in pairs(vs) do
@@ -606,8 +608,8 @@ sidedef = {
 		local i, d = mouse_linedef(bag)
 		if i then
 			local ld = bag.brick.linedefs[i]
-			local vtx0 = bag.tx:apply(bag.brick.vertices[ld.vertex0])
-			local vtx1 = bag.tx:apply(bag.brick.vertices[ld.vertex1])
+			local vtx0 = bag.tx:apply(bag.brick.vertices[ld.vertex[1]])
+			local vtx1 = bag.tx:apply(bag.brick.vertices[ld.vertex[2]])
 			local v = (vtx1-vtx0):normalize()
 			local n = v:normal()
 			local sgn = d>0 and 1 or -1
@@ -625,8 +627,8 @@ sidedef = {
 		if i then
 			local ld = bag.brick.linedefs[i]
 			local lds = linedefside(d)
-			if ld[lds] then
-				selection:toggle_one(ld[lds])
+			if ld.sidedef[lds] then
+				selection:toggle_one(ld.sidedef[lds])
 			end
 		end
 	end,
@@ -649,9 +651,9 @@ sidedef = {
 		end
 		local toggled = {}
 		for i,ld in ipairs(bag.brick.linedefs) do
-			if vertices[ld.vertex0] and vertices[ld.vertex1] then
+			if vertices[ld.vertex[1]] and vertices[ld.vertex[2]] then
 				for _,side in ipairs{-1,1} do
-					local sd = ld[linedefside(side)]
+					local sd = ld.sidedef[linedefside(side)]
 					if sd and not toggled[sd] then
 						selection:toggle_one(sd)
 					end
@@ -698,9 +700,9 @@ sidedef = {
 		end
 		local vs = {}
 		for _,ld in ipairs(brick.linedefs) do
-			if sds[ld.sidedef_left] or sds[ld.sidedef_right] then
-				vs[ld.vertex0] = true
-				vs[ld.vertex1] = true
+			if sds[ld.sidedef[1]] or sds[ld.sidedef[2]] then
+				vs[ld.vertex[1]] = true
+				vs[ld.vertex[2]] = true
 			end
 		end
 		local vsi = {}
@@ -743,11 +745,11 @@ sector = {
 		end
 		for i,ld in ipairs(bag.brick.linedefs) do
 			for _,side in ipairs{-1,1} do
-				local sdi = ld[linedefside(side)]
+				local sdi = ld.sidedef[linedefside(side)]
 				if sdi then
 					local sd = bag.brick.sidedefs[sdi]
 					if sd.sector then
-						if not vertices[ld.vertex0] or not vertices[ld.vertex1] then
+						if not vertices[ld.vertex[1]] or not vertices[ld.vertex[2]] then
 							sectors[sd.sector] = false
 						end
 					end
@@ -782,9 +784,9 @@ sector = {
 		end
 		local vs = {}
 		for _,ld in ipairs(brick.linedefs) do
-			if sds[ld.sidedef_left] or sds[ld.sidedef_right] then
-				vs[ld.vertex0] = true
-				vs[ld.vertex1] = true
+			if sds[ld.sidedef[1]] or sds[ld.sidedef[2]] then
+				vs[ld.vertex[1]] = true
+				vs[ld.vertex[2]] = true
 			end
 		end
 		local vsi = {}
@@ -805,16 +807,16 @@ function render_brick(bag)
 		else
 			love.graphics.setColor{70,70,70,255}
 		end
-		local vtx0 = bag.tx:apply(bag.brick.vertices[ld.vertex0])
-		local vtx1 = bag.tx:apply(bag.brick.vertices[ld.vertex1])
+		local vtx0 = bag.tx:apply(bag.brick.vertices[ld.vertex[1]])
+		local vtx1 = bag.tx:apply(bag.brick.vertices[ld.vertex[2]])
 		love.graphics.line(vtx0[1], vtx0[2], vtx1[1], vtx1[2])
 
 		for _,side in ipairs{-1,1} do
 			local lds = linedefside(side)
-			if ld[lds] then
-				local sd = bag.brick.sidedefs[ld[lds]]
+			if ld.sidedef[lds] then
+				local sd = bag.brick.sidedefs[ld.sidedef[lds]]
 				if
-					((bag.mode == modes.sidedef or bag.mode.previous_mode == modes.sidedef) and selection:has(ld[lds]))
+					((bag.mode == modes.sidedef or bag.mode.previous_mode == modes.sidedef) and selection:has(ld.sidedef[lds]))
 					or ((bag.mode == modes.sector or bag.mode.previous_mode == modes.sector) and sd.sector and selection:has(sd.sector))
 				then
 					love.graphics.setColor(MAGIC.selection_color)
@@ -936,8 +938,8 @@ function tx_mode(bag, impl)
 			love.graphics.setLineWidth(1)
 			love.graphics.setColor(15,30,100,255)
 			for _,ld in ipairs(bag.brick.linedefs) do
-				local p0 = vz[ld.vertex0]
-				local p1 = vz[ld.vertex1]
+				local p0 = vz[ld.vertex[1]]
+				local p1 = vz[ld.vertex[2]]
 				if p0 and p1 then
 					love.graphics.line(p0[1], p0[2], p1[1], p1[2])
 				end
