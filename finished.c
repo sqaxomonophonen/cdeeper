@@ -4,9 +4,7 @@
 #include "a.h"
 #include "llvl.h"
 #include "m.h"
-
-#define WIDTH (16*24)
-#define HEIGHT (9*24)
+#include "render.h"
 
 static void glew_init()
 {
@@ -38,6 +36,8 @@ static float frand(float min, float max)
 }
 */
 
+
+#include "magic.h"
 int main(int argc, char** argv)
 {
 	if (argc != 2) {
@@ -46,11 +46,6 @@ int main(int argc, char** argv)
 	}
 
 	char* brickname = argv[1];
-
-	printf("sizeof(struct lvl_sector) = %zd\n", sizeof(struct lvl_sector));
-	printf("sizeof(struct lvl_linedef) = %zd\n", sizeof(struct lvl_linedef));
-	printf("sizeof(struct lvl_sidedef) = %zd\n", sizeof(struct lvl_sidedef));
-	printf("sizeof(struct vec2) = %zd\n", sizeof(struct vec2));
 
 	SAZ(SDL_Init(SDL_INIT_VIDEO));
 	atexit(SDL_Quit);
@@ -63,8 +58,6 @@ int main(int argc, char** argv)
 		"deeper",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		0, 0,
-		//WIDTH,
-		//HEIGHT,
 		bitmask);
 	SAN(window);
 
@@ -75,12 +68,24 @@ int main(int argc, char** argv)
 
 	glew_init();
 
+	// get display width/height
+	int width = 0;
+	int height = 0;
+	SDL_GetWindowSize(window, &width, &height);
+
+
+	// get refresh rate
 	SDL_DisplayMode mode;
 	SDL_GetCurrentDisplayMode(SDL_GetWindowDisplayIndex(window), &mode);
 	printf("refresh rate: %dhz\n", mode.refresh_rate);
 	float dt = 1.0f / (float)mode.refresh_rate;
 	/* ^^^ XXX use refresh rate for dt per default to get a smoother
 	 * experience? allow time() based alternative? */
+
+
+
+	struct render render;
+	render_init(&render, window);
 
 	glEnable(GL_DEPTH_TEST); CHKGL;
 	glEnable(GL_CULL_FACE); CHKGL;
@@ -90,15 +95,10 @@ int main(int argc, char** argv)
 
 	struct lvl lvl;
 	lvl_init(&lvl);
-	//sudo_make_me_a_demo(&lvl);
 
 	llvl_load(brickname, &lvl);
 
-	int width = 0;
-	int height = 0;
-	SDL_GetWindowSize(window, &width, &height);
 
-	glViewport(0, 0, width, height);
 
 	struct lvl_entity player;
 	memset(&player, 0, sizeof(player));
@@ -238,11 +238,9 @@ int main(int argc, char** argv)
 			}
 		}
 
-
-		glClearColor(0,0,0,1);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 		if (overhead_mode) {
+			// XXX TODO FIXME port/move this to render.c
+			#if 0
 			glMatrixMode(GL_PROJECTION);
 			glLoadIdentity();
 			glOrtho(-WIDTH/2, WIDTH/2, HEIGHT/2, -HEIGHT/2, 1, 0);
@@ -281,34 +279,20 @@ int main(int argc, char** argv)
 				glVertex2f(v1->s[0], v1->s[1]);
 			}
 			glEnd();
+			#endif
 		} else {
-			glMatrixMode(GL_PROJECTION);
-			glLoadIdentity();
-			float fovy = 65;
-			float aspect = (float)WIDTH/(float)HEIGHT;
-			gluPerspective(fovy, aspect, 0.1, 4096);
-			//glOrtho(-WIDTH/2, WIDTH/2, HEIGHT/2, -HEIGHT/2, 1, 0);
-
-			glMatrixMode(GL_MODELVIEW);
-			glLoadIdentity();
-			//glTranslatef(0,0,-400);
-			glRotatef(player.yaw, 0, 1, 0);
-			glTranslatef(-player.p.s[0],-player.z,-player.p.s[1]);
-			//glRotatef(a, 0, 0, 1);
-			//glRotatef(a, 1, 0, 0);
-			//if (go) a += 0.25f;
-
 			struct vec3 pos;
 			struct vec3 mdir;
-			lvl_entity_mouse(&player, &pos, &mdir, fovy, mouse_x, mouse_y, width, height);
-
+			lvl_entity_mouse(&player, &pos, &mdir, render_get_fovy(&render), mouse_x, mouse_y, width, height);
 			struct lvl_trace_result trace_result;
 			//int sectori = lvl_sector_find(&lvl, &player.p);
 			//int sectori = player.sector;
 			lvl_trace(&lvl, player.sector, &pos, &mdir, &trace_result);
 
 			lvl_tag(&lvl, &trace_result, clicked);
-			lvl_draw(&lvl);
+
+			render_set_entity_cam(&render, &player);
+			render_lvl(&render, &lvl);
 		}
 
 		SDL_GL_SwapWindow(window);
@@ -317,9 +301,8 @@ int main(int argc, char** argv)
 	SDL_DestroyWindow(window);
 	SDL_GL_DeleteContext(glctx);
 
-	llvl_save(brickname, &lvl);
+	//llvl_save(brickname, &lvl); XXX I will eventually need this again
 
 	return 0;
 }
-
 

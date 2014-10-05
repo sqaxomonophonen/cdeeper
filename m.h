@@ -25,18 +25,33 @@ struct vec3 {
 };
 
 void vec3_scale(struct vec3* dst, struct vec3* src, float scalar);
+void vec3_scalei(struct vec3* dst, float scalar);
 void vec3_addi(struct vec3* dst, struct vec3* src);
+void vec3_sub(struct vec3* dst, struct vec3* a, struct vec3* b);
 float vec3_dot(struct vec3* a, struct vec3* b);
 void vec3_cross(struct vec3* dst, struct vec3* a, struct vec3* b);
 void vec3_copy(struct vec3* dst, struct vec3* src);
 void vec3_add_scalei(struct vec3* dst, struct vec3* src, float scalar);
 void vec3_normalize(struct vec3* x);
 void vec3_set(struct vec3* v, float r, float g, float b);
+void vec3_set8(struct vec3* v, int r, int g, int b);
 void vec3_lerp(struct vec3* dst, struct vec3* a, struct vec3* b, float t);
+
+/* transform RGB vector into the unicorns color space, suitable for measuring
+ * euclidean distances */
+void vec3_rgb2unicorns(struct vec3* v);
+
 
 void vec3_to_vec2(struct vec3* v3, struct vec2* v2);
 
 void vec2_rgbize(struct vec3* rgb, struct vec2* v);
+
+struct mat33 {
+	float s[9];
+};
+
+void mat33_apply(struct mat33* m, struct vec3* dst, struct vec3* src);
+void mat33_applyi(struct mat33* m, struct vec3* v);
 
 /*
 struct mat23 {

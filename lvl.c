@@ -2,33 +2,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <tesselator.h>
-
-#include <GL/glew.h>
 
 #include "a.h"
 #include "lvl.h"
 
-static void* my_malloc(void* usr, unsigned int sz)
-{
-	//printf("my_malloc(%u)\n", sz);
-	return malloc(sz);
-}
-
-static void* my_realloc(void* usr, void* ptr, unsigned int sz)
-{
-	//printf("my_realloc(%u)\n", sz);
-	return realloc(ptr, sz);
-}
-
-static void my_free(void* usr, void* ptr)
-{
-	//printf("my_free()\n");
-	return free(ptr);
-}
-
 void lvl_init(struct lvl* lvl)
 {
+	printf("sizeof(struct lvl_sector) = %zd\n", sizeof(struct lvl_sector));
+	printf("sizeof(struct lvl_linedef) = %zd\n", sizeof(struct lvl_linedef));
+	printf("sizeof(struct lvl_sidedef) = %zd\n", sizeof(struct lvl_sidedef));
+	printf("sizeof(struct vec2) = %zd\n", sizeof(struct vec2));
+
 	memset(lvl, 0, sizeof(struct lvl));
 
 	const int more_than_I_will_ever_need = 32768;
@@ -130,7 +114,7 @@ struct vec2* lvl_get_vertex(struct lvl* lvl, int32_t i)
 	return &lvl->vertices[i];
 }
 
-static struct lvl_contour* lvl_get_contour(struct lvl* lvl, int32_t i)
+struct lvl_contour* lvl_get_contour(struct lvl* lvl, int32_t i)
 {
 	ASSERT(i >= 0 && i < lvl->n_contours);
 	return &lvl->contours[i];
@@ -172,9 +156,7 @@ static void lvl_swap_contours(struct lvl* lvl, int32_t i0, int32_t i1)
 }
 
 #define MARK_CONTOUR_FIRST(c) (c->usr |= 2)
-#define CONTOUR_IS_FIRST(c) (c->usr & 2)
 #define MARK_CONTOUR_LAST(c) (c->usr |= 4)
-#define CONTOUR_IS_LAST(c) (c->usr & 4)
 
 void lvl_build_contours(struct lvl* lvl)
 {
@@ -278,298 +260,6 @@ void lvl_build_contours(struct lvl* lvl)
 
 		c0i++;
 	}
-}
-
-static void lvl_sector_draw_lines_partial(struct lvl* lvl, int32_t sectori, int flati)
-{
-	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-	struct vec2* vlast = NULL;
-	int begun = 0;
-
-	for (int i = 0; i < sector->contourn; i++) {
-		int ci = sector->contour0 + i;
-
-		struct lvl_contour* c = lvl_get_contour(lvl, ci);
-
-		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-		struct vec2* v = lvl_get_vertex(lvl, l->vertex[c->usr&1]);
-		AN(v);
-
-		if (vlast != NULL) {
-			struct plane* plane = &sector->flat[flati].plane;
-			float zlast = plane_z(plane, vlast);
-			float z = plane_z(plane, v);
-			glBegin(GL_LINES);
-			glColor4f(0,0,0,1);
-			glVertex3f(vlast->s[0], zlast, vlast->s[1]);
-			glColor4f(1,1,0,1);
-			glVertex3f(v->s[0], z, v->s[1]);
-			glEnd();
-		}
-
-		vlast = v;
-
-		if (CONTOUR_IS_FIRST(c)) {
-			AZ(begun);
-			begun = 1;
-		}
-
-		if (CONTOUR_IS_LAST(c)) {
-			AN(begun);
-			begun = 0;
-			vlast = NULL;
-		}
-	}
-}
-
-void lvl_sector_draw_lines(struct lvl* lvl, int32_t sectori)
-{
-	lvl_sector_draw_lines_partial(lvl, sectori, 0);
-	lvl_sector_draw_lines_partial(lvl, sectori, 1);
-}
-
-static void lvl_sector_draw_flat_partial(struct lvl* lvl, int32_t sectori, int flati)
-{
-	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-
-	TESSalloc ta;
-	TESStesselator* t;
-
-	ta.memalloc = my_malloc;
-	ta.memrealloc = my_realloc;
-	ta.memfree = my_free;
-	ta.userData = NULL;
-	ta.meshEdgeBucketSize = 64;
-	ta.meshVertexBucketSize = 64;
-	ta.meshFaceBucketSize = 32;
-	ta.dictNodeBucketSize = 64;
-	ta.regionBucketSize = 32;
-	ta.extraVertices = 0;
-
-	t = tessNewTess(&ta);
-
-	struct vec2 points[16384];
-
-	int32_t p = 0;
-	int32_t p0 = -1;
-
-	int begun = 0;
-	for (int i = 0; i < sector->contourn; i++) {
-		int ci = sector->contour0 + i;
-
-		if (p0 == -1) p0 = p;
-
-		struct lvl_contour* c = lvl_get_contour(lvl, ci);
-
-		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-		struct vec2* v = lvl_get_vertex(lvl, l->vertex[c->usr&1]);
-		AN(v);
-
-		if (CONTOUR_IS_FIRST(c)) {
-			p0 = p;
-			AZ(begun);
-			begun = 1;
-		}
-
-		memcpy(&points[p], v, sizeof(struct vec2));
-
-		if (CONTOUR_IS_LAST(c)) {
-			ASSERT(p > p0);
-			tessAddContour(t, 2, &points[p0], sizeof(struct vec2), p - p0 + 1);
-			p0 = -1;
-			AN(begun);
-			begun = 0;
-		}
-
-		p++;
-	}
-
-	int nvp = 3;
-	int tess_result = tessTesselate(t, TESS_WINDING_POSITIVE, TESS_POLYGONS, nvp, 2, NULL);
-	//int tess_result = tessTesselate(t, TESS_WINDING_ODD, TESS_POLYGONS, nvp, 2, NULL);
-	//int tess_result = tessTesselate(t, TESS_WINDING_NONZERO, TESS_POLYGONS, nvp, 2, NULL);
-	ASSERT(tess_result == 1);
-
-	const float* verts = tessGetVertices(t);
-	int nelems = tessGetElementCount(t);
-	const int* elems = tessGetElements(t);
-
-	for (int i = 0; i < nelems; i++) {
-		glBegin(GL_TRIANGLES);
-		//glBegin(GL_LINE_STRIP);
-		const int* p = &elems[i * nvp];
-		for (int j = 0; j < nvp; j++) {
-			ASSERT(p[j] != TESS_UNDEF);
-			int k = flati ? nvp - 1 - j : j;
-			struct vec2 v;
-			struct plane* plane = &sector->flat[flati].plane;
-			v.s[0] = verts[p[k]*2];
-			v.s[1] = verts[p[k]*2+1];
-			float z = plane_z(plane, &v);
-			glVertex3f(v.s[0], z, v.s[1]);
-		}
-		glEnd();
-	}
-
-	tessDeleteTess(t);
-}
-
-void lvl_sector_draw_flats(struct lvl* lvl, int32_t sectori)
-{
-	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-
-	float r,g,b;
-
-	r = 0; g = 0.1; b = 0.2;
-	if (sector->usr & LVL_HIGHLIGHTED_ZMINUS) {
-		r += 0.1f;
-		g += 0.1f;
-		b += 0.1f;
-	}
-	if (sector->usr & LVL_SELECTED_ZMINUS) {
-		r += 1.0f;
-		g += 1.0f;
-	}
-
-	glColor4f(r,g,b,1);
-	lvl_sector_draw_flat_partial(lvl, sectori, 0);
-
-	r = 0.1; g = 0.2; b = 0;
-	if (sector->usr & LVL_HIGHLIGHTED_ZPLUS) {
-		r += 0.1f;
-		g += 0.1f;
-		b += 0.1f;
-	}
-	if (sector->usr & LVL_SELECTED_ZPLUS) {
-		r += 1.0f;
-		g += 1.0f;
-	}
-	glColor4f(r,g,b,1);
-	lvl_sector_draw_flat_partial(lvl, sectori, 1);
-}
-
-static void lvl_sector_draw_walls(struct lvl* lvl, int32_t sectori)
-{
-	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-
-	for (int i = 0; i < sector->contourn; i++) {
-		int ci = sector->contour0 + i;
-
-		struct lvl_contour* c = lvl_get_contour(lvl, ci);
-		struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
-
-		struct vec2* v0 = lvl_get_vertex(lvl, l->vertex[c->usr&1]);
-		struct vec2* v1 = lvl_get_vertex(lvl, l->vertex[(c->usr&1)^1]);
-		struct lvl_sidedef* sd = l->sidedef[c->usr&1] == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef[c->usr&1]);
-		struct lvl_sidedef* sopp = l->sidedef[(c->usr&1)^1] == -1 ? NULL : lvl_get_sidedef(lvl, l->sidedef[(c->usr&1)^1]);
-
-		AN(v0);
-		AN(v1);
-		AN(sd);
-
-		struct vec2 vd;
-		vec2_sub(&vd, v1, v0);
-		struct vec3 stdcolor;
-		vec2_rgbize(&stdcolor, &vd);
-		struct vec3 mid;
-		vec3_set(&mid, 0.3, 0.3, 0.3);
-		vec3_lerp(&stdcolor, &stdcolor, &mid, 0.8f);
-
-		struct vec3 color;
-
-		if (sopp == NULL) {
-			// one-sided
-			float z0 = plane_z(&sector->flat[1].plane, v0);
-			float z1 = plane_z(&sector->flat[1].plane, v1);
-			float z2 = plane_z(&sector->flat[0].plane, v1);
-			float z3 = plane_z(&sector->flat[0].plane, v0);
-
-			vec3_copy(&color, &stdcolor);
-			if ((sd->usr & LVL_HIGHLIGHTED_ZMINUS) || (sd->usr & LVL_HIGHLIGHTED_ZPLUS)) {
-				struct vec3 a;
-				vec3_set(&a, 0.1, 0.1, 0.1);
-				vec3_addi(&color, &a);
-			}
-			if ((sd->usr & LVL_SELECTED_ZMINUS) || (sd->usr & LVL_SELECTED_ZPLUS)) {
-				struct vec3 a;
-				vec3_set(&a, 0.7, 0.7, 0);
-				vec3_addi(&color, &a);
-			}
-			glColor4f(color.s[0], color.s[1], color.s[2], 1);
-
-			glBegin(GL_QUADS);
-			glVertex3f(v0->s[0], z0, v0->s[1]);
-			glVertex3f(v1->s[0], z1, v1->s[1]);
-			glVertex3f(v1->s[0], z2, v1->s[1]);
-			glVertex3f(v0->s[0], z3, v0->s[1]);
-			glEnd();
-		} else {
-			// two-sided
-			struct lvl_sector* sector1 = lvl_get_sector(lvl, sopp->sector);
-			{
-				float z0 = plane_z(&sector1->flat[0].plane, v0);
-				float z1 = plane_z(&sector1->flat[0].plane, v1);
-				float z2 = plane_z(&sector->flat[0].plane, v1);
-				float z3 = plane_z(&sector->flat[0].plane, v0);
-
-				if (z1 > z2 && z0 > z3) {
-					vec3_copy(&color, &stdcolor);
-					if (sd->usr & LVL_HIGHLIGHTED_ZMINUS) {
-						struct vec3 a;
-						vec3_set(&a, 0.1, 0.1, 0.1);
-						vec3_addi(&color, &a);
-					}
-					if (sd->usr & LVL_SELECTED_ZMINUS) {
-						struct vec3 a;
-						vec3_set(&a, 0.7, 0.7, 0);
-						vec3_addi(&color, &a);
-					}
-					glColor4f(color.s[0], color.s[1], color.s[2], 1);
-
-					glBegin(GL_QUADS);
-					glVertex3f(v0->s[0], z0, v0->s[1]);
-					glVertex3f(v1->s[0], z1, v1->s[1]);
-					glVertex3f(v1->s[0], z2, v1->s[1]);
-					glVertex3f(v0->s[0], z3, v0->s[1]);
-					glEnd();
-				} // XXX else: crossing?
-			}
-			{
-				float z0 = plane_z(&sector1->flat[1].plane, v0);
-				float z1 = plane_z(&sector1->flat[1].plane, v1);
-				float z2 = plane_z(&sector->flat[1].plane, v1);
-				float z3 = plane_z(&sector->flat[1].plane, v0);
-
-				if (z1 < z2 && z0 < z3) {
-					vec3_copy(&color, &stdcolor);
-					if (sd->usr & LVL_HIGHLIGHTED_ZPLUS) {
-						struct vec3 a;
-						vec3_set(&a, 0.1, 0.1, 0.1);
-						vec3_addi(&color, &a);
-					}
-					if (sd->usr & LVL_SELECTED_ZPLUS) {
-						struct vec3 a;
-						vec3_set(&a, 0.7, 0.7, 0);
-						vec3_addi(&color, &a);
-					}
-					glColor4f(color.s[0], color.s[1], color.s[2], 1);
-
-					glBegin(GL_QUADS);
-					glVertex3f(v0->s[0], z3, v0->s[1]);
-					glVertex3f(v1->s[0], z2, v1->s[1]);
-					glVertex3f(v1->s[0], z1, v1->s[1]);
-					glVertex3f(v0->s[0], z0, v0->s[1]);
-					glEnd();
-				} // XXX else: crossing?
-			}
-		}
-	}
-}
-
-void lvl_draw_sector(struct lvl* lvl, int32_t sectori)
-{
-	lvl_sector_draw_flats(lvl, sectori);
-	lvl_sector_draw_walls(lvl, sectori);
 }
 
 int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
@@ -973,11 +663,3 @@ void lvl_tag(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
 	}
 }
 
-void lvl_draw(struct lvl* lvl)
-{
-	for (int i = 0; i < lvl->n_sectors; i++) {
-		//if (i != 0) continue;
-		lvl_draw_sector(lvl, i);
-		lvl_sector_draw_lines(lvl, i);
-	}
-}

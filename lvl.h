@@ -9,6 +9,9 @@
 #define LVL_HIGHLIGHTED_ZMINUS (1<<2)
 #define LVL_SELECTED_ZMINUS (1<<3)
 
+#define LVL_CONTOUR_IS_FIRST(c) (c->usr & 2)
+#define LVL_CONTOUR_IS_LAST(c) (c->usr & 4)
+
 struct lvl_flat {
 	struct plane plane; // local to vertex 0
 	//int32_t material;
@@ -75,8 +78,8 @@ uint32_t lvl_new_vertex(struct lvl*);
 uint32_t lvl_top_vertex(struct lvl* lvl);
 struct vec2* lvl_get_vertex(struct lvl*, int32_t i);
 
-void lvl_sector_draw_lines(struct lvl* lvl, int32_t sectori);
-//void lvl_sector_draw_flats(struct lvl* lvl, int32_t sectori);
+struct lvl_contour* lvl_get_contour(struct lvl* lvl, int32_t i);
+
 
 struct lvl_entity {
 	struct vec2 p;
@@ -115,11 +118,7 @@ int lvl_trace(
 int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p);
 int32_t lvl_sector_find(struct lvl* lvl, struct vec2* p);
 
-
-void lvl_draw_sector(struct lvl* lvl, int32_t sectori);
-
 void lvl_tag(struct lvl* lvl, struct lvl_trace_result* trace, int clicked);
-void lvl_draw(struct lvl* lvl);
 
 
 #endif//LVL_H

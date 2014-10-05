@@ -1,5 +1,6 @@
 #include <math.h>
 #include "m.h"
+#include "a.h"
 
 void plane_floor(struct plane* p, float z)
 {
@@ -106,10 +107,24 @@ void vec3_scale(struct vec3* dst, struct vec3* src, float scalar)
 	}
 }
 
+void vec3_scalei(struct vec3* dst, float scalar)
+{
+	for (int i = 0; i < 3; i++) {
+		dst->s[i] *= scalar;
+	}
+}
+
 void vec3_addi(struct vec3* dst, struct vec3* src)
 {
 	for (int i = 0; i < 3; i++) {
 		dst->s[i] += src->s[i];
+	}
+}
+
+void vec3_sub(struct vec3* dst, struct vec3* a, struct vec3* b)
+{
+	for (int i = 0; i < 3; i++) {
+		dst->s[i] = a->s[i] - b->s[i];
 	}
 }
 
@@ -154,6 +169,13 @@ void vec3_set(struct vec3* v, float r, float g, float b)
 	v->s[0] = r;
 	v->s[1] = g;
 	v->s[2] = b;
+}
+
+void vec3_set8(struct vec3* v, int r, int g, int b)
+{
+	v->s[0] = (float)r/255.0f;
+	v->s[1] = (float)g/256.0f;
+	v->s[2] = (float)b/256.0f;
 }
 
 void vec3_lerp(struct vec3* dst, struct vec3* a, struct vec3* b, float t)
@@ -206,5 +228,79 @@ float ray_plane_intersection(struct vec3* position, struct vec3* origin, struct 
 	} else {
 		return 0.0f;
 	}
+}
+
+static float labfn(float t)
+{
+	float thres = powf(6.0/29.0, 3.0);
+	if (t > thres) {
+		return powf(t, 3.0);
+	} else {
+		return (1.0/3.0) * powf(29.0/6.0, 2.0) * t + (4.0 / 29.0);
+	}
+}
+
+void vec3_rgb2unicorns(struct vec3* v)
+{
+	// rgb -> xyz
+	struct mat33 m = {{
+		0.49, 0.31, 0.20,
+		0.17697, 0.81240, 0.01063,
+		0.00, 0.01, 0.99
+	}};
+	mat33_applyi(&m, v);
+	vec3_scalei(v, 1.0/0.17697);
+
+	// xyz -> lab
+	float x = v->s[0];
+	float y = v->s[1];
+	float z = v->s[2];
+	float xn = 1.0/3.0;
+	float yn = 1.0/3.0;
+	float zn = 1.0/3.0;
+	v->s[0] = 116.0 * labfn(y/yn) - 16.0;
+	v->s[1] = 500.0 * (labfn(x/xn) - labfn(y/yn));
+	v->s[2] = 200.0 * (labfn(y/yn) - labfn(z/zn));
+}
+
+static float mat33_at(struct mat33* m, int i, int j)
+{
+	ASSERT(i >= 0 && i < 3);
+	ASSERT(j >= 0 && j < 3);
+	return m->s[i*3+j];
+}
+
+static void mat33_row(struct mat33* m, struct vec3* row, int i)
+{
+	ASSERT(i >= 0 && i < 3);
+	for (int x = 0; x < 3; x++) {
+		row->s[x] = mat33_at(m, i, x);
+	}
+}
+
+#if 0
+static void mat33_col(struct mat33* m, struct vec3* col, int j)
+{
+	ASSERT(j >= 0 && j < 3);
+	for (int x = 0; x < 3; x++) {
+		col->s[x] = mat33_at(m, x, j);
+	}
+}
+#endif
+
+void mat33_apply(struct mat33* m, struct vec3* dst, struct vec3* src)
+{
+	for (int i = 0; i < 3; i++) {
+		struct vec3 row;
+		mat33_row(m, &row, i);
+		dst->s[i] = vec3_dot(src, &row);
+	}
+}
+
+void mat33_applyi(struct mat33* m, struct vec3* v)
+{
+	struct vec3 dst;
+	mat33_apply(m, &dst, v);
+	vec3_copy(v, &dst);
 }
 
