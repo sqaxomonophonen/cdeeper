@@ -581,9 +581,6 @@ static void render_flats(struct render* render, struct lvl* lvl)
 	}
 	#endif
 
-	glDisable(GL_CULL_FACE);
-	glEnable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
 
 	shader_use(&render->flat_shader);
 
@@ -715,11 +712,6 @@ static void render_walls(struct render* render, struct lvl* lvl)
 		}
 	}
 
-
-	glDisable(GL_CULL_FACE);
-	glEnable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
-
 	shader_use(&render->wall_shader);
 
 	glActiveTexture(GL_TEXTURE0); CHKGL;
@@ -837,6 +829,9 @@ void render_lvl(struct render* render, struct lvl* lvl)
 	glViewport(0, 0, MAGIC_RWIDTH, MAGIC_RHEIGHT);
 	glClearColor(0,0,0,0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
 
 	render_flats(render, lvl);
 	render_walls(render, lvl);
