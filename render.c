@@ -393,6 +393,15 @@ static void render_init_buffers(struct render* render)
 	static_quad_buffers(&render->step_vertex_buffer, &render->step_index_buffer, MAGIC_RWIDTH, MAGIC_RHEIGHT);
 }
 
+static void render_init_tagstuff(struct render* render)
+{
+	render->tags_flat_vertices = malloc(sizeof(struct vec3) * RENDER_BUFSZ);
+	AN(render->tags_flat_vertices);
+
+	render->tags_flat_indices = malloc(sizeof(int) * RENDER_BUFSZ);
+	AN(render->tags_flat_indices);
+}
+
 void render_init(struct render* render, SDL_Window* window)
 {
 	render->window = window;
@@ -403,6 +412,8 @@ void render_init(struct render* render, SDL_Window* window)
 	render_init_framebuffers(render);
 	render_init_shaders(render);
 	render_init_buffers(render);
+	render_init_tagstuff(render);
+
 }
 
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity)
@@ -436,7 +447,7 @@ static void tess_free(void* usr, void* ptr)
 }
 
 
-static void add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v)
+static void renderctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v)
 {
 	ASSERT(render->flat_vertex_n < RENDER_BUFSZ);
 	float* data = &render->flat_vertex_data[render->flat_vertex_n * FLOATS_PER_FLAT_VERTEX];
@@ -451,14 +462,20 @@ static void add_flat_vertex(struct render* render, float x, float y, float z, fl
 	render->flat_vertex_n++;
 }
 
-static void add_flat_index(struct render* render, uint32_t index)
+static void renderctx_begin_flat(struct render* render, struct lvl* lvl, int sectori, int flati)
 {
-	ASSERT(render->flat_index_n < RENDER_BUFSZ);
-	//printf("index: %d\n", index);
-	render->flat_index_data[render->flat_index_n++] = index;
+	render->flat_offset = render->flat_vertex_n;
 }
 
-static void render_flat_partial(struct render* render, struct lvl* lvl, int sectori, int flati)
+static void renderctx_add_flat_triangle(struct render* render, uint32_t indices[3])
+{
+	ASSERT((render->flat_index_n+3) <= RENDER_BUFSZ);
+	for (int i = 0; i < 3; i++) {
+		render->flat_index_data[render->flat_index_n++] = render->flat_offset + indices[i];
+	}
+}
+
+static void yield_flat_partial(struct render* render, struct lvl* lvl, int sectori, int flati)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 
@@ -520,7 +537,7 @@ static void render_flat_partial(struct render* render, struct lvl* lvl, int sect
 	//int tess_result = tessTesselate(t, TESS_WINDING_NONZERO, TESS_POLYGONS, nvp, 2, NULL);
 	ASSERT(tess_result == 1);
 
-	int offset = render->flat_vertex_n;
+	render->begin_flat(render, lvl, sectori, flati);
 
 	int nverts = tessGetVertexCount(t);
 	const float* verts = tessGetVertices(t);
@@ -530,7 +547,8 @@ static void render_flat_partial(struct render* render, struct lvl* lvl, int sect
 		v.s[0] = verts[i*2];
 		v.s[1] = verts[i*2+1];
 		float z = plane_z(plane, &v);
-		add_flat_vertex(
+		AN(render->add_flat_vertex);
+		render->add_flat_vertex(
 			render,
 			v.s[0], z, v.s[1], // XYZ
 			v.s[0], v.s[1], // UV
@@ -543,77 +561,31 @@ static void render_flat_partial(struct render* render, struct lvl* lvl, int sect
 
 	for (int i = 0; i < nelems; i++) {
 		const int* p = &elems[i * nvp];
+		uint32_t indices[3];
 		for (int j = 0; j < nvp; j++) {
 			ASSERT(p[j] != TESS_UNDEF);
 			int k = flati ? nvp - 1 - j : j;
-			add_flat_index(render, offset + p[k]);
+			indices[j] = p[k];
 		}
+		AN(render->add_flat_triangle);
+		render->add_flat_triangle(render, indices);
 	}
+
+	if (render->end_flat) render->end_flat(render);
 
 	tessDeleteTess(t);
 }
 
-static void render_flats(struct render* render, struct lvl* lvl)
+static void yield_flats(struct render* render, struct lvl* lvl)
 {
-	render->flat_vertex_n = 0;
-	render->flat_index_n = 0;
-
 	for (int i = 0; i < lvl->n_sectors; i++) {
-		render_flat_partial(render, lvl, i, 0);
-		render_flat_partial(render, lvl, i, 1);
+		yield_flat_partial(render, lvl, i, 0);
+		yield_flat_partial(render, lvl, i, 1);
 	}
 
-	AZ(render->flat_index_n % 3); // threeangles!
-
-	#if 0
-	for (int i = 0; i < (render->flat_index_n/3); i++) {
-		glBegin(GL_LINE_LOOP);
-		//glColor4f(i&1,i&2,i&4,1);
-		glColor4f(1,1,1,1);
-		for (int j = 0; j < 3; j++) {
-			uint32_t k =  render->flat_index_data[i*3+j];
-			float x = render->flat_vertex_data[k*FLOATS_PER_FLAT_VERTEX];
-			float y = render->flat_vertex_data[k*FLOATS_PER_FLAT_VERTEX+1];
-			float z = render->flat_vertex_data[k*FLOATS_PER_FLAT_VERTEX+2];
-			glVertex3f(x, y, z);
-		}
-		glEnd();
-	}
-	#endif
-
-
-	shader_use(&render->flat_shader);
-
-	glActiveTexture(GL_TEXTURE0); CHKGL;
-	glEnable(GL_TEXTURE_2D); CHKGL;
-	glBindTexture(GL_TEXTURE_2D, render->flatlas_texture); CHKGL;
-
-	glBindBuffer(GL_ARRAY_BUFFER, render->flat_vertex_buffer); CHKGL;
-	glBufferSubData(GL_ARRAY_BUFFER, 0, render->flat_vertex_n * sizeof(float) * FLOATS_PER_FLAT_VERTEX, render->flat_vertex_data); CHKGL;
-
-	glEnableVertexAttribArray(render->flat_a_pos); CHKGL;
-	glVertexAttribPointer(render->flat_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, 0); CHKGL;
-
-	glEnableVertexAttribArray(render->flat_a_uv); CHKGL;
-	glVertexAttribPointer(render->flat_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
-
-	glEnableVertexAttribArray(render->flat_a_selector); CHKGL;
-	glVertexAttribPointer(render->flat_a_selector, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->flat_index_buffer); CHKGL;
-	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, render->flat_index_n * sizeof(uint32_t), render->flat_index_data); CHKGL;
-
-	glDrawElements(GL_TRIANGLES, render->flat_index_n, GL_UNSIGNED_INT, NULL); CHKGL;
-
-	glDisableVertexAttribArray(render->flat_a_selector); CHKGL;
-	glDisableVertexAttribArray(render->flat_a_uv); CHKGL;
-	glDisableVertexAttribArray(render->flat_a_pos); CHKGL;
-
-	glActiveTexture(GL_TEXTURE0); CHKGL;
-	glDisable(GL_TEXTURE_2D); CHKGL;
 }
 
-static void add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
+static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
 	ASSERT(render->wall_vertex_n < RENDER_BUFSZ);
 	float* data = &render->wall_vertex_data[render->wall_vertex_n * FLOATS_PER_WALL_VERTEX];
@@ -625,10 +597,8 @@ static void add_wall_vertex(struct render* render, float x, float y, float z, fl
 	render->wall_vertex_n++;
 }
 
-static void render_walls(struct render* render, struct lvl* lvl)
+static void yield_walls(struct render* render, struct lvl* lvl)
 {
-	render->wall_vertex_n = 0;
-
 	for (int i = 0; i < lvl->n_sectors; i++) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, i);
 
@@ -664,10 +634,12 @@ static void render_walls(struct render* render, struct lvl* lvl)
 				float tu1 = vd_length;
 				float tv1 = z2;
 
-				add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
-				add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
-				add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
-				add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+				if (render->begin_wall) render->begin_wall(render, lvl, ci, 0);
+				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
+				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
+				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
+				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+				if (render->end_wall) render->end_wall(render);
 
 			} else {
 				// two-sided
@@ -684,10 +656,12 @@ static void render_walls(struct render* render, struct lvl* lvl)
 					float tv1 = z2;
 
 					if (z1 > z2 && z0 > z3) {
-						add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
-						add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
-						add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
-						add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+						if (render->begin_wall) render->begin_wall(render, lvl, ci, -1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
 				{
@@ -702,15 +676,88 @@ static void render_walls(struct render* render, struct lvl* lvl)
 					float tv1 = z2;
 
 					if (z1 < z2 && z0 < z3) {
-						add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0);
-						add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0);
-						add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1);
-						add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1);
+						if (render->begin_wall) render->begin_wall(render, lvl, ci, 1);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1);
+						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
 			}
 		}
 	}
+}
+
+
+static void flat_callbacks(
+	struct render* render,
+	void (*begin_flat)(
+		struct render* render,
+		struct lvl* lvl,
+		int sectori,
+		int flati
+	),
+	void (*add_flat_vertex)(
+		struct render* render,
+		float x, float y, float z,
+		float u, float v,
+		float select_u, float select_v
+	),
+	void (*add_flat_triangle)(
+		struct render* render,
+		uint32_t indices[3]
+	),
+	void (*end_flat)(struct render* render))
+{
+
+	AN(begin_flat);
+	AN(add_flat_vertex);
+	AN(add_flat_triangle);
+	render->begin_flat = begin_flat;
+	render->add_flat_vertex = add_flat_vertex;
+	render->add_flat_triangle = add_flat_triangle;
+	render->end_flat = end_flat;
+
+	render->begin_wall = NULL;
+	render->add_wall_vertex = NULL;
+	render->end_wall = NULL;
+}
+
+static void wall_callbacks(
+	struct render* render,
+	void (*begin_wall)(
+		struct render* render,
+		struct lvl* lvl,
+		int contouri,
+		int dz
+	),
+	void (*add_wall_vertex)(
+		struct render* render,
+		float x, float y, float z,
+		float u, float v
+	),
+	void (*end_wall)(struct render* render))
+{
+	AN(add_wall_vertex);
+	render->begin_wall = begin_wall;
+	render->add_wall_vertex = add_wall_vertex;
+	render->end_wall = end_wall;
+
+	render->begin_flat = NULL;
+	render->add_flat_vertex = NULL;
+	render->add_flat_triangle = NULL;
+	render->end_flat = NULL;
+}
+
+
+static void render_walls(struct render* render, struct lvl* lvl)
+{
+	render->wall_vertex_n = 0;
+
+	wall_callbacks(render, NULL, renderctx_add_wall_vertex, NULL);
+
+	yield_walls(render, lvl);
 
 	shader_use(&render->wall_shader);
 
@@ -779,6 +826,13 @@ static void render_step(struct render* render)
 	glDisable(GL_TEXTURE_2D); CHKGL;
 }
 
+static void gl_viewport_from_sdl_window(SDL_Window* window)
+{
+	int w, h;
+	SDL_GetWindowSize(window, &w, &h);
+	glViewport(0, 0, w, h); CHKGL;
+}
+
 static void render_blit(struct render* render)
 {
 	glUseProgram(0); CHKGL;
@@ -787,9 +841,7 @@ static void render_blit(struct render* render)
 	glDisable(GL_CULL_FACE); CHKGL;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); CHKGL;
-	int w, h;
-	SDL_GetWindowSize(render->window, &w, &h);
-	glViewport(0, 0, w, h); CHKGL;
+	gl_viewport_from_sdl_window(render->window);
 
 	glMatrixMode(GL_PROJECTION); CHKGL;
 	glLoadIdentity(); CHKGL;
@@ -811,8 +863,54 @@ static void render_blit(struct render* render)
 	glEnd();
 
 }
+static void render_flats(struct render* render, struct lvl* lvl)
+{
+	render->flat_vertex_n = 0;
+	render->flat_index_n = 0;
+	flat_callbacks(
+		render,
+		renderctx_begin_flat,
+		renderctx_add_flat_vertex,
+		renderctx_add_flat_triangle,
+		NULL
+	);
+	yield_flats(render, lvl);
 
-void render_lvl(struct render* render, struct lvl* lvl)
+	AZ(render->flat_index_n % 3); // threeangles!
+
+	shader_use(&render->flat_shader);
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glEnable(GL_TEXTURE_2D); CHKGL;
+	glBindTexture(GL_TEXTURE_2D, render->flatlas_texture); CHKGL;
+
+	glBindBuffer(GL_ARRAY_BUFFER, render->flat_vertex_buffer); CHKGL;
+	glBufferSubData(GL_ARRAY_BUFFER, 0, render->flat_vertex_n * sizeof(float) * FLOATS_PER_FLAT_VERTEX, render->flat_vertex_data); CHKGL;
+
+	glEnableVertexAttribArray(render->flat_a_pos); CHKGL;
+	glVertexAttribPointer(render->flat_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, 0); CHKGL;
+
+	glEnableVertexAttribArray(render->flat_a_uv); CHKGL;
+	glVertexAttribPointer(render->flat_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
+
+	glEnableVertexAttribArray(render->flat_a_selector); CHKGL;
+	glVertexAttribPointer(render->flat_a_selector, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->flat_index_buffer); CHKGL;
+	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, render->flat_index_n * sizeof(uint32_t), render->flat_index_data); CHKGL;
+
+	glDrawElements(GL_TRIANGLES, render->flat_index_n, GL_UNSIGNED_INT, NULL); CHKGL;
+
+	glDisableVertexAttribArray(render->flat_a_selector); CHKGL;
+	glDisableVertexAttribArray(render->flat_a_uv); CHKGL;
+	glDisableVertexAttribArray(render->flat_a_pos); CHKGL;
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glDisable(GL_TEXTURE_2D); CHKGL;
+}
+
+
+static void gl_transform(struct render* render)
 {
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -824,6 +922,12 @@ void render_lvl(struct render* render, struct lvl* lvl)
 	glLoadIdentity();
 	glRotatef(render->entity_cam->yaw, 0, 1, 0);
 	glTranslatef(-render->entity_cam->p.s[0], -render->entity_cam->z, -render->entity_cam->p.s[1]);
+
+}
+
+void render_lvl(struct render* render, struct lvl* lvl)
+{
+	gl_transform(render);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, render->screen_framebuffer); CHKGL;
 	glViewport(0, 0, MAGIC_RWIDTH, MAGIC_RHEIGHT);
@@ -841,5 +945,118 @@ void render_lvl(struct render* render, struct lvl* lvl)
 
 	glUseProgram(0); CHKGL;
 	glBindFramebuffer(GL_FRAMEBUFFER, 0); CHKGL;
+}
+
+static void tagsctx_gl_color(int hover, int selected)
+{
+	if (selected) {
+		glColor4f(1,1,0,0.3);
+	} else if (hover) {
+		glColor4f(1,1,1,0.1);
+	} else {
+		glColor4f(1,1,1,0);
+	}
+}
+
+static void tagsctx_begin_flat(struct render* render, struct lvl* lvl, int sectori, int flati)
+{
+	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
+	int hover = ((flati == 0 && (sector->usr & LVL_HIGHLIGHTED_ZMINUS)) || (flati == 1 && (sector->usr & LVL_HIGHLIGHTED_ZPLUS)));
+	int selected = ((flati == 0 && (sector->usr & LVL_SELECTED_ZMINUS)) || (flati == 1 && (sector->usr & LVL_SELECTED_ZPLUS)));
+	if (hover || selected) {
+		render->tags_flat_vertex_n = 0;
+		render->tags_flat_index_n = 0;
+		tagsctx_gl_color(hover, selected);
+	} else {
+		render->tags_flat_vertex_n = -1;
+		render->tags_flat_index_n = -1;
+	}
+}
+
+static void tagsctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v)
+{
+	if (render->tags_flat_vertex_n < 0) return;
+	struct vec3 p;
+	p.s[0] = x;
+	p.s[1] = y;
+	p.s[2] = z;
+	vec3_copy(&render->tags_flat_vertices[render->tags_flat_vertex_n++], &p);
+
+}
+
+static void tagsctx_add_flat_triangle(struct render* render, uint32_t indices[3])
+{
+	if (render->tags_flat_index_n < 0) return;
+	for (int i = 0; i < 3; i++) {
+		render->tags_flat_indices[render->tags_flat_index_n++] = indices[i];
+	}
+}
+
+static void tagsctx_end_flat(struct render* render)
+{
+	if (render->tags_flat_index_n < 0) return;
+	glBegin(GL_TRIANGLES);
+	for (int i = 0; i < render->tags_flat_index_n; i++) {
+		struct vec3* v = &render->tags_flat_vertices[render->tags_flat_indices[i]];
+		glVertex3f(v->s[0], v->s[1], v->s[2]);
+	}
+	glEnd();
+}
+
+static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int contouri, int dz)
+{
+	struct lvl_contour* c = lvl_get_contour(lvl, contouri);
+	struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
+	struct lvl_sidedef* sd = lvl_get_sidedef(lvl, ld->sidedef[c->usr&1]);
+
+	int hover = (dz <= 0 && (sd->usr & LVL_HIGHLIGHTED_ZMINUS)) || (dz >= 0 && (sd->usr & LVL_HIGHLIGHTED_ZPLUS));
+	int selected = (dz <= 0 && (sd->usr & LVL_SELECTED_ZMINUS)) || (dz >= 0 && (sd->usr & LVL_SELECTED_ZPLUS));
+
+	tagsctx_gl_color(hover, selected);
+	glBegin(GL_QUADS);
+}
+
+static void tagsctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
+{
+	glVertex3f(x,y,z);
+}
+
+static void tagsctx_end_wall(struct render* render)
+{
+	glEnd();
+}
+
+void render_lvl_tags(struct render* render, struct lvl* lvl)
+{
+	gl_transform(render);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); CHKGL;
+	gl_viewport_from_sdl_window(render->window);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(0);
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glDisable(GL_TEXTURE_2D); CHKGL;
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+
+	flat_callbacks(
+		render,
+		tagsctx_begin_flat,
+		tagsctx_add_flat_vertex,
+		tagsctx_add_flat_triangle,
+		tagsctx_end_flat
+	);
+	yield_flats(render, lvl);
+
+	wall_callbacks(
+		render,
+		tagsctx_begin_wall,
+		tagsctx_add_wall_vertex,
+		tagsctx_end_wall
+	);
+	yield_walls(render, lvl);
 }
 

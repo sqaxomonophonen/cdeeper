@@ -293,6 +293,7 @@ int main(int argc, char** argv)
 
 			render_set_entity_cam(&render, &player);
 			render_lvl(&render, &lvl);
+			render_lvl_tags(&render, &lvl);
 		}
 
 		SDL_GL_SwapWindow(window);

@@ -24,6 +24,7 @@ struct render {
 	float* flat_vertex_data;
 	int32_t* flat_index_data;
 	int flat_vertex_n;
+	int flat_offset;;
 	int flat_index_n;
 
 	GLuint wall0_texture;
@@ -50,6 +51,42 @@ struct render {
 
 	struct shader step_shader;
 	GLuint step_a_pos;
+
+	void (*begin_flat)(
+		struct render* render,
+		struct lvl* lvl,
+		int sectori,
+		int flati
+	);
+	void (*add_flat_vertex)(
+		struct render* render,
+		float x, float y, float z,
+		float u, float v,
+		float select_u, float select_v
+	);
+	void (*add_flat_triangle)(
+		struct render* render,
+		uint32_t indices[3]
+	);
+	void (*end_flat)(struct render* render);
+
+	void (*begin_wall)(
+		struct render* render,
+		struct lvl* lvl,
+		int contouri,
+		int dz
+	);
+	void (*add_wall_vertex)(
+		struct render* render,
+		float x, float y, float z,
+		float u, float v
+	);
+	void (*end_wall)(struct render* render);
+
+	struct vec3* tags_flat_vertices;
+	int tags_flat_vertex_n;
+	int* tags_flat_indices;
+	int tags_flat_index_n;
 };
 
 
@@ -57,5 +94,6 @@ void render_init(struct render* render, SDL_Window* window);
 float render_get_fovy(struct render* render);
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity);
 void render_lvl(struct render* render, struct lvl* lvl);
+void render_lvl_tags(struct render* render, struct lvl* lvl);
 
 #endif/*RENDER_H*/
