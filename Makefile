@@ -32,6 +32,9 @@ render.o: render.c render.h shader.h
 mud.o: mud.c mud.h
 	$(CC) $(CFLAGS) -c mud.c
 
+font.o: font.c font.h mud.h shader.h a.h
+	$(CC) $(CFLAGS) -c font.c
+
 shader.o: shader.c shader.h
 	$(CC) $(CFLAGS) -c shader.c
 
@@ -44,8 +47,8 @@ llvl.o: llvl.c llvl.h lvl.h
 finished.o: finished.c
 	$(CC) $(CFLAGS) -c finished.c
 
-finished: res render.o mud.o shader.o lvl.o llvl.o m.o a.o finished.o
-	$(CC) $(LINK) render.o mud.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
+finished: res render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
+	$(CC) $(LINK) render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
 
 clean:
 	rm -rf *.o finished dgfx/*

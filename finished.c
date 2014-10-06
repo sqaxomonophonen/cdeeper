@@ -5,6 +5,7 @@
 #include "llvl.h"
 #include "m.h"
 #include "render.h"
+#include "font.h"
 
 static void glew_init()
 {
@@ -83,6 +84,8 @@ int main(int argc, char** argv)
 	 * experience? allow time() based alternative? */
 
 
+	struct font font;
+	font_init(&font);
 
 	struct render render;
 	render_init(&render, window);
@@ -123,6 +126,8 @@ int main(int argc, char** argv)
 
 	int mouse_x = 0;
 	int mouse_y = 0;
+
+	int frame = 1;
 
 	while (!exiting) {
 		SDL_Event e;
@@ -292,7 +297,17 @@ int main(int argc, char** argv)
 			lvl_tag(&lvl, &trace_result, clicked);
 
 			render_set_entity_cam(&render, &player);
-			render_lvl(&render, &lvl);
+			render_lvl_geom(&render, &lvl);
+
+			render_begin2d(&render);
+			font_begin(&font, 6);
+			font_goto(&font, 10, 10);
+			font_color(&font, 2);
+			font_printf(&font, "hello world\nthis is frame %d", frame);
+			frame++;
+			font_end(&font);
+
+			render_flip(&render);
 			render_lvl_tags(&render, &lvl);
 		}
 

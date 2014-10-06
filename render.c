@@ -925,7 +925,23 @@ static void gl_transform(struct render* render)
 
 }
 
-void render_lvl(struct render* render, struct lvl* lvl)
+void render_begin2d(struct render* render)
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, render->screen_framebuffer); CHKGL;
+	glViewport(0, 0, MAGIC_RWIDTH, MAGIC_RHEIGHT);
+
+	glDisable(GL_DEPTH_TEST); CHKGL;
+	glDisable(GL_CULL_FACE); CHKGL;
+
+	glMatrixMode(GL_PROJECTION); CHKGL;
+	glLoadIdentity(); CHKGL;
+	glOrtho(0,MAGIC_RWIDTH,MAGIC_RHEIGHT,0,-1,1); CHKGL;
+
+	glMatrixMode(GL_MODELVIEW); CHKGL;
+	glLoadIdentity();
+}
+
+void render_lvl_geom(struct render* render, struct lvl* lvl)
 {
 	gl_transform(render);
 
@@ -939,7 +955,10 @@ void render_lvl(struct render* render, struct lvl* lvl)
 
 	render_flats(render, lvl);
 	render_walls(render, lvl);
+}
 
+void render_flip(struct render* render)
+{
 	render_step(render);
 	render_blit(render);
 

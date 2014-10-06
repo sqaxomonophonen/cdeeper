@@ -93,7 +93,9 @@ struct render {
 void render_init(struct render* render, SDL_Window* window);
 float render_get_fovy(struct render* render);
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity);
-void render_lvl(struct render* render, struct lvl* lvl);
+void render_lvl_geom(struct render* render, struct lvl* lvl);
+void render_begin2d(struct render* render);
+void render_flip(struct render* render);
 void render_lvl_tags(struct render* render, struct lvl* lvl);
 
 #endif/*RENDER_H*/
