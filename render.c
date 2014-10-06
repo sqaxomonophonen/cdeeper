@@ -2,7 +2,6 @@
 #include "render.h"
 #include "mud.h"
 #include "a.h"
-#include "mem.h"
 
 #include <tesselator.h>
 #include <GL/glew.h>
