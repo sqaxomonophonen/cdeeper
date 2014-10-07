@@ -44,10 +44,12 @@ struct render {
 	GLuint flat_a_pos;
 	GLuint flat_a_uv;
 	GLuint flat_a_selector;
+	GLuint flat_a_light_level;
 
 	struct shader wall_shader;
 	GLuint wall_a_pos;
 	GLuint wall_a_uv;
+	GLuint wall_a_light_level;
 
 	struct shader step_shader;
 	GLuint step_a_pos;
@@ -62,7 +64,8 @@ struct render {
 		struct render* render,
 		float x, float y, float z,
 		float u, float v,
-		float select_u, float select_v
+		float select_u, float select_v,
+		float light_level
 	);
 	void (*add_flat_triangle)(
 		struct render* render,
@@ -79,7 +82,8 @@ struct render {
 	void (*add_wall_vertex)(
 		struct render* render,
 		float x, float y, float z,
-		float u, float v
+		float u, float v,
+		float light_level
 	);
 	void (*end_wall)(struct render* render);
 

@@ -129,6 +129,13 @@ int main(int argc, char** argv)
 
 	int frame = 1;
 
+	enum {
+		ED_NONE = 1,
+		ED_FLAT_Z,
+		ED_LIGHT_LEVEL
+	//} ed = ED_FLAT_Z;
+	} ed = ED_NONE;
+
 	while (!exiting) {
 		SDL_Event e;
 		int clicked = 0;
@@ -157,6 +164,18 @@ int main(int argc, char** argv)
 
 				if (e.key.keysym.sym == SDLK_KP_PLUS) ctrl_zoom_in = 1;
 				if (e.key.keysym.sym == SDLK_KP_MINUS) ctrl_zoom_out = 1;
+
+				switch (e.key.keysym.sym) {
+					case SDLK_BACKQUOTE:
+						ed = ED_NONE;
+						break;
+					case SDLK_1:
+						ed = ED_FLAT_Z;
+						break;
+					case SDLK_2:
+						ed = ED_LIGHT_LEVEL;
+						break;
+				}
 			}
 
 			if (e.type == SDL_KEYUP) {
@@ -231,14 +250,25 @@ int main(int argc, char** argv)
 
 
 		if (mouse_z) {
-			for (int i = 0; i < lvl.n_sectors; i++) {
-				struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-				float d = mouse_z * 8;
-				if (sector->usr & LVL_SELECTED_ZMINUS) {
-					sector->flat[0].plane.s[3] -= d;
+			if (ed == ED_FLAT_Z) {
+				for (int i = 0; i < lvl.n_sectors; i++) {
+					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
+					float d = mouse_z * 8;
+					if (sector->usr & LVL_SELECTED_ZMINUS) {
+						sector->flat[0].plane.s[3] -= d;
+					}
+					if (sector->usr & LVL_SELECTED_ZPLUS) {
+						sector->flat[1].plane.s[3] += d;
+					}
 				}
-				if (sector->usr & LVL_SELECTED_ZPLUS) {
-					sector->flat[1].plane.s[3] += d;
+			}
+			if (ed == ED_LIGHT_LEVEL) {
+				for (int i = 0; i < lvl.n_sectors; i++) {
+					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
+					float d = mouse_z * 0.025f;
+					if (sector->usr & LVL_SELECTED_ZMINUS) {
+						sector->light_level += d;
+					}
 				}
 			}
 		}
@@ -294,16 +324,29 @@ int main(int argc, char** argv)
 			//int sectori = player.sector;
 			lvl_trace(&lvl, player.sector, &pos, &mdir, &trace_result);
 
-			lvl_tag(&lvl, &trace_result, clicked);
+			lvl_tag_clear_highlights(&lvl);
+
+			if (ed == ED_FLAT_Z) {
+				lvl_tag_flats(&lvl, &trace_result, clicked);
+			}
+			if (ed == ED_LIGHT_LEVEL) {
+				lvl_tag_sectors(&lvl, &trace_result, clicked);
+			}
 
 			render_set_entity_cam(&render, &player);
 			render_lvl_geom(&render, &lvl);
 
 			render_begin2d(&render);
 			font_begin(&font, 6);
-			font_goto(&font, 10, 10);
-			font_color(&font, 2);
-			font_printf(&font, "hello world\nthis is frame %d", frame);
+			font_goto(&font, 6, 6);
+			font_color(&font, 3);
+			font_printf(&font,
+				"mode: %s",
+				ed == ED_NONE ? "none" :
+				ed == ED_FLAT_Z ? "flat z" :
+				ed == ED_LIGHT_LEVEL ? "light level" :
+				"???"
+			);
 			frame++;
 			font_end(&font);
 
@@ -317,7 +360,7 @@ int main(int argc, char** argv)
 	SDL_DestroyWindow(window);
 	SDL_GL_DeleteContext(glctx);
 
-	//llvl_save(brickname, &lvl); XXX I will eventually need this again
+	llvl_save(brickname, &lvl);
 
 	return 0;
 }

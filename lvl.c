@@ -611,7 +611,25 @@ int lvl_trace(
 	return 0;
 }
 
-void lvl_tag(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
+void lvl_tag_clear_highlights(struct lvl* lvl)
+{
+	int highlighted = LVL_HIGHLIGHTED_ZPLUS | LVL_HIGHLIGHTED_ZMINUS;
+	for (int i = 0; i < lvl->n_sectors; i++) {
+		struct lvl_sector* sector = lvl_get_sector(lvl, i);
+		sector->usr &= ~highlighted;
+		for (int j = 0; j < sector->contourn; j++) {
+			int32_t ci = sector->contour0 + j;
+			struct lvl_contour* c = lvl_get_contour(lvl, ci);
+			struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
+			uint32_t sdi = ld->sidedef[c->usr&1];
+			ASSERT(sdi != -1);
+			struct lvl_sidedef* sd = lvl_get_sidedef(lvl, sdi);
+			sd->usr &= ~highlighted;
+		}
+	}
+}
+
+void lvl_tag_flats(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
 {
 	for (int i = 0; i < lvl->n_sectors; i++) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, i);
@@ -632,6 +650,51 @@ void lvl_tag(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
 				}
 			}
 		}
+	}
+}
+
+void lvl_tag_sectors(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
+{
+	int selected = LVL_SELECTED_ZPLUS | LVL_SELECTED_ZMINUS;
+	int highlighted = LVL_HIGHLIGHTED_ZPLUS | LVL_HIGHLIGHTED_ZMINUS;
+
+	for (int i = 0; i < lvl->n_sectors; i++) {
+		struct lvl_sector* sector = lvl_get_sector(lvl, i);
+
+		if (i == trace->sector) {
+			sector->usr |= highlighted;
+			if (clicked) {
+				sector->usr ^= selected;
+			}
+		} else {
+			sector->usr &= ~highlighted;
+		}
+
+		for (int j = 0; j < sector->contourn; j++) {
+			int32_t ci = sector->contour0 + j;
+			struct lvl_contour* c = lvl_get_contour(lvl, ci);
+			struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
+			uint32_t sdi = ld->sidedef[c->usr&1];
+			ASSERT(sdi != -1);
+
+			struct lvl_sidedef* sd = lvl_get_sidedef(lvl, sdi);
+
+			if (i == trace->sector) {
+				sd->usr |= highlighted;
+				if (clicked) {
+					sd->usr ^= selected;
+				}
+			} else {
+				sd->usr &= ~highlighted;
+			}
+		}
+	}
+}
+
+void lvl_tag_sidedefs(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
+{
+	for (int i = 0; i < lvl->n_sectors; i++) {
+		struct lvl_sector* sector = lvl_get_sector(lvl, i);
 
 		for (int j = 0; j < sector->contourn; j++) {
 			int32_t ci = sector->contour0 + j;
@@ -662,4 +725,3 @@ void lvl_tag(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)
 		}
 	}
 }
-

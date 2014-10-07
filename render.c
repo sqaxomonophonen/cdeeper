@@ -7,11 +7,21 @@
 #include <GL/glew.h>
 
 
-#define FLOATS_PER_FLAT_VERTEX (7)
-#define FLOATS_PER_WALL_VERTEX (5)
+#define FLOATS_PER_FLAT_VERTEX (8)
+#define FLOATS_PER_WALL_VERTEX (6)
 
 // XXX TODO should roll my own matrix stack. gl_ModelViewProjectionMatrix,
 // glLoadIdentity() and so on are all deprecated
+
+
+#define DEF_LIGHT_FALLOFF_FN	\
+	"float light_falloff_fn (float light_level, float z)\n" \
+	"{\n" \
+	"	float ib = 1.0 - light_level;\n" \
+	"	ib = ib*ib*ib*ib*ib*ib;\n" \
+	"	float v = (light_level + 1.0) / (length(z) * ib + light_level + 1);\n" \
+	"	return 1-v;\n" \
+	"}\n"
 
 // flat shader source
 static const char* flat_shader_vertex_src =
@@ -20,15 +30,21 @@ static const char* flat_shader_vertex_src =
 	"attribute vec3 a_pos;\n"
 	"attribute vec2 a_uv;\n"
 	"attribute vec2 a_selector;\n"
+	"attribute float a_light_level;\n"
 	"\n"
 	"varying vec2 v_uv;\n"
 	"varying vec2 v_selector;\n"
+	"varying float v_light_level;\n"
+	"varying float v_z;\n"
 	"\n"
 	"void main()\n"
 	"{\n"
+	"	vec4 pos = gl_ModelViewMatrix * vec4(a_pos, 1);\n"
+	"	v_z = pos.z;\n"
 	"	v_uv = a_uv;\n"
 	"	v_selector = a_selector;\n"
-	"	gl_Position = gl_ModelViewProjectionMatrix * vec4(a_pos, 1);\n"
+	"	v_light_level = a_light_level;\n"
+	"	gl_Position = gl_ProjectionMatrix * pos;\n"
 	"}\n";
 
 static const char* flat_shader_fragment_src =
@@ -36,8 +52,12 @@ static const char* flat_shader_fragment_src =
 	"\n"
 	"varying vec2 v_uv;\n"
 	"varying vec2 v_selector;\n"
+	"varying float v_light_level;\n"
+	"varying float v_z;\n"
 	"\n"
 	"uniform sampler2D u_flatlas;\n"
+	"\n"
+	DEF_LIGHT_FALLOFF_FN
 	"\n"
 	"void main(void)\n"
 	"{\n"
@@ -46,7 +66,7 @@ static const char* flat_shader_fragment_src =
 	"	vec2 uv = (clamp(fract(v_uv / flat_size) * flat_size, 0.5, flat_size - 0.5) + v_selector) / atlas_size;\n"
 	"	float index = texture2D(u_flatlas, uv).r;\n"
 	//"	gl_FragColor = vec4(index, 0, 0, 1);\n" // TODO green is light value
-	"	gl_FragColor = vec4(index, 0.5, 0, 1);\n"
+	"	gl_FragColor = vec4(index, light_falloff_fn(v_light_level, v_z), 0, 1);\n"
 	"}\n";
 
 
@@ -56,28 +76,38 @@ static const char* wall_shader_vertex_src =
 	"\n"
 	"attribute vec3 a_pos;\n"
 	"attribute vec2 a_uv;\n"
+	"attribute float a_light_level;\n"
 	"\n"
 	"varying vec2 v_uv;\n"
+	"varying float v_z;\n"
+	"varying float v_light_level;\n"
 	"\n"
 	"void main()\n"
 	"{\n"
+	"	vec4 pos = gl_ModelViewMatrix * vec4(a_pos, 1);\n"
+	"	v_z = pos.z;\n"
 	"	v_uv = a_uv;\n"
-	"	gl_Position = gl_ModelViewProjectionMatrix * vec4(a_pos, 1);\n"
+	"	v_light_level = a_light_level;\n"
+	"	gl_Position = gl_ProjectionMatrix * pos;\n"
 	"}\n";
 
 static const char* wall_shader_fragment_src =
 	"#version 130\n"
 	"\n"
 	"varying vec2 v_uv;\n"
+	"varying float v_light_level;\n"
+	"varying float v_z;\n"
 	"\n"
 	"uniform sampler2D u_texture;\n"
+	"\n"
+	DEF_LIGHT_FALLOFF_FN
 	"\n"
 	"void main(void)\n"
 	"{\n"
 	"	vec2 nuv = vec2(v_uv.x/256, v_uv.y/128);\n" // XXX texture dimension assumption.. probably move it to the "client"
 	"	float index = texture2D(u_texture, nuv).r;\n"
 	//"	gl_FragColor = vec4(index, 0, 0, 1);\n" // TODO green is light value
-	"	gl_FragColor = vec4(index, 0.7, 0, 1);\n"
+	"	gl_FragColor = vec4(index, light_falloff_fn(v_light_level, v_z), 0, 1);\n"
 	"}\n";
 
 
@@ -289,6 +319,7 @@ static void render_init_shaders(struct render* render)
 	render->flat_a_pos = glGetAttribLocation(render->flat_shader.program, "a_pos"); CHKGL;
 	render->flat_a_uv = glGetAttribLocation(render->flat_shader.program, "a_uv"); CHKGL;
 	render->flat_a_selector = glGetAttribLocation(render->flat_shader.program, "a_selector"); CHKGL;
+	render->flat_a_light_level = glGetAttribLocation(render->flat_shader.program, "a_light_level"); CHKGL;
 	glUniform1i(glGetUniformLocation(render->flat_shader.program, "u_flatlas"), 0); CHKGL;
 
 	// wall shader
@@ -296,6 +327,7 @@ static void render_init_shaders(struct render* render)
 	shader_use(&render->wall_shader);
 	render->wall_a_pos = glGetAttribLocation(render->wall_shader.program, "a_pos"); CHKGL;
 	render->wall_a_uv = glGetAttribLocation(render->wall_shader.program, "a_uv"); CHKGL;
+	render->wall_a_light_level = glGetAttribLocation(render->wall_shader.program, "a_light_level"); CHKGL;
 	glUniform1i(glGetUniformLocation(render->wall_shader.program, "u_texture"), 0); CHKGL;
 
 	// step shader
@@ -446,17 +478,19 @@ static void tess_free(void* usr, void* ptr)
 }
 
 
-static void renderctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v)
+static void renderctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v, float light_level)
 {
 	ASSERT(render->flat_vertex_n < RENDER_BUFSZ);
 	float* data = &render->flat_vertex_data[render->flat_vertex_n * FLOATS_PER_FLAT_VERTEX];
-	data[0] = x;
-	data[1] = y;
-	data[2] = z;
-	data[3] = u;
-	data[4] = v;
-	data[5] = select_u;
-	data[6] = select_v;
+	int i = 0;
+	data[i++] = x;
+	data[i++] = y;
+	data[i++] = z;
+	data[i++] = u;
+	data[i++] = v;
+	data[i++] = select_u;
+	data[i++] = select_v;
+	data[i++] = light_level;
 	//printf("%f %f %f\n", x, y, z);
 	render->flat_vertex_n++;
 }
@@ -477,6 +511,7 @@ static void renderctx_add_flat_triangle(struct render* render, uint32_t indices[
 static void yield_flat_partial(struct render* render, struct lvl* lvl, int sectori, int flati)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
+	float ll = sector->light_level;
 
 	TESSalloc ta;
 
@@ -551,7 +586,8 @@ static void yield_flat_partial(struct render* render, struct lvl* lvl, int secto
 			render,
 			v.s[0], z, v.s[1], // XYZ
 			v.s[0], v.s[1], // UV
-			0, 0 // selector (XXX TODO FIXME get from texture)
+			0, 0, // selector (XXX TODO FIXME get from texture)
+			ll
 		);
 	}
 
@@ -584,15 +620,17 @@ static void yield_flats(struct render* render, struct lvl* lvl)
 
 }
 
-static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
+static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v, float light_level)
 {
 	ASSERT(render->wall_vertex_n < RENDER_BUFSZ);
 	float* data = &render->wall_vertex_data[render->wall_vertex_n * FLOATS_PER_WALL_VERTEX];
-	data[0] = x;
-	data[1] = y;
-	data[2] = z;
-	data[3] = u;
-	data[4] = v;
+	int i = 0;
+	data[i++] = x;
+	data[i++] = y;
+	data[i++] = z;
+	data[i++] = u;
+	data[i++] = v;
+	data[i++] = light_level;
 	render->wall_vertex_n++;
 }
 
@@ -600,6 +638,7 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 {
 	for (int i = 0; i < lvl->n_sectors; i++) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, i);
+		float ll = sector->light_level;
 
 		for (int i = 0; i < sector->contourn; i++) {
 			int ci = sector->contour0 + i;
@@ -634,10 +673,10 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 				float tv1 = z2;
 
 				if (render->begin_wall) render->begin_wall(render, lvl, ci, 0);
-				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
-				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
-				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
-				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0, ll);
+				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0, ll);
+				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1, ll);
+				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1, ll);
 				if (render->end_wall) render->end_wall(render);
 
 			} else {
@@ -656,10 +695,10 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 
 					if (z1 > z2 && z0 > z3) {
 						if (render->begin_wall) render->begin_wall(render, lvl, ci, -1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0, ll);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0, ll);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1, ll);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1, ll);
 						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
@@ -676,10 +715,10 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 
 					if (z1 < z2 && z0 < z3) {
 						if (render->begin_wall) render->begin_wall(render, lvl, ci, 1);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0, ll);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0, ll);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1, ll);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1, ll);
 						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
@@ -701,7 +740,8 @@ static void flat_callbacks(
 		struct render* render,
 		float x, float y, float z,
 		float u, float v,
-		float select_u, float select_v
+		float select_u, float select_v,
+		float light_level
 	),
 	void (*add_flat_triangle)(
 		struct render* render,
@@ -734,7 +774,8 @@ static void wall_callbacks(
 	void (*add_wall_vertex)(
 		struct render* render,
 		float x, float y, float z,
-		float u, float v
+		float u, float v,
+		float light_level
 	),
 	void (*end_wall)(struct render* render))
 {
@@ -773,9 +814,13 @@ static void render_walls(struct render* render, struct lvl* lvl)
 	glEnableVertexAttribArray(render->wall_a_uv); CHKGL;
 	glVertexAttribPointer(render->wall_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
 
+	glEnableVertexAttribArray(render->wall_a_light_level); CHKGL;
+	glVertexAttribPointer(render->wall_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
+
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->wall_index_buffer); CHKGL;
 	glDrawElements(GL_TRIANGLES, render->wall_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
 
+	glDisableVertexAttribArray(render->wall_a_light_level); CHKGL;
 	glDisableVertexAttribArray(render->wall_a_uv); CHKGL;
 	glDisableVertexAttribArray(render->wall_a_pos); CHKGL;
 
@@ -895,11 +940,15 @@ static void render_flats(struct render* render, struct lvl* lvl)
 	glEnableVertexAttribArray(render->flat_a_selector); CHKGL;
 	glVertexAttribPointer(render->flat_a_selector, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
 
+	glEnableVertexAttribArray(render->flat_a_light_level); CHKGL;
+	glVertexAttribPointer(render->flat_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_FLAT_VERTEX, (char*)(sizeof(float)*7)); CHKGL;
+
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->flat_index_buffer); CHKGL;
 	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, render->flat_index_n * sizeof(uint32_t), render->flat_index_data); CHKGL;
 
 	glDrawElements(GL_TRIANGLES, render->flat_index_n, GL_UNSIGNED_INT, NULL); CHKGL;
 
+	glDisableVertexAttribArray(render->flat_a_light_level); CHKGL;
 	glDisableVertexAttribArray(render->flat_a_selector); CHKGL;
 	glDisableVertexAttribArray(render->flat_a_uv); CHKGL;
 	glDisableVertexAttribArray(render->flat_a_pos); CHKGL;
@@ -991,7 +1040,7 @@ static void tagsctx_begin_flat(struct render* render, struct lvl* lvl, int secto
 	}
 }
 
-static void tagsctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v)
+static void tagsctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v, float light_level)
 {
 	if (render->tags_flat_vertex_n < 0) return;
 	struct vec3 p;
@@ -1034,7 +1083,7 @@ static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int conto
 	glBegin(GL_QUADS);
 }
 
-static void tagsctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
+static void tagsctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v, float light_level)
 {
 	glVertex3f(x,y,z);
 }

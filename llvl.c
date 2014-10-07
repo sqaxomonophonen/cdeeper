@@ -130,7 +130,18 @@ static void read_sectors(lua_State* L, struct lvl* lvl, const char* name)
 
 		uint32_t seci = lvl_new_sector(lvl);
 		struct lvl_sector* sec = lvl_get_sector(lvl, seci);
-		for (int i = 0; i < 2; i++) read_flat(L, sec, i);
+
+		for (int i = 0; i < 2; i++) {
+			read_flat(L, sec, i);
+		}
+
+		lua_getfield(L, -1, "light_level");
+		if (lua_isnil(L, -1)) {
+			sec->light_level = 1.0;
+		} else {
+			sec->light_level = lua_tonumber(L, -1);
+		}
+		lua_pop(L, 1);
 
 		lua_pop(L, 1);
 	}
@@ -258,6 +269,9 @@ static void write_sectors(lua_State* L, struct lvl* lvl)
 		if (!lua_istable(L, -1)) arghf("expected r[\"sectors\"][%d] to be a table", i+1);
 
 		for (int i = 0; i < 2; i++) write_flat(L, sector, i);
+
+		lua_pushnumber(L, sector->light_level);
+		lua_setfield(L, -2, "light_level");
 
 		lua_pop(L, 1);
 	}
