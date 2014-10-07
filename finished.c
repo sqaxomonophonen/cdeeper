@@ -6,6 +6,7 @@
 #include "m.h"
 #include "render.h"
 #include "font.h"
+#include "names.h"
 
 static void glew_init()
 {
@@ -270,10 +271,10 @@ int main(int argc, char** argv)
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
 					if (sector->usr & LVL_SELECTED_ZMINUS) {
-						sector->flat[0].texture = clampi(sector->flat[0].texture + mouse_z, 0, 255);
+						sector->flat[0].texture = clampi(sector->flat[0].texture + mouse_z, 0, names_number_of_flats()-1);
 					}
 					if (sector->usr & LVL_SELECTED_ZPLUS) {
-						sector->flat[1].texture = clampi(sector->flat[1].texture + mouse_z, 0, 255);
+						sector->flat[1].texture = clampi(sector->flat[1].texture + mouse_z, 0, names_number_of_flats()-1);
 					}
 				}
 			}
