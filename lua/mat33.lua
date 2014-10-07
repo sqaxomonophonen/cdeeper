@@ -52,11 +52,10 @@ mt.minors = function (self)
 	local minors = {}
 	for i = 1,3 do
 		for j = 1,3 do
-			table.insert(minors, 
-				self:at(M[i][1], M[j][1]) * self:at(M[i][2], M[j][2]) - 
+			table.insert(minors,
+				self:at(M[i][1], M[j][1]) * self:at(M[i][2], M[j][2]) -
 				self:at(M[i][2], M[j][1]) * self:at(M[i][1], M[j][2])
 			)
-				
 		end
 	end
 	return static.new(minors)
