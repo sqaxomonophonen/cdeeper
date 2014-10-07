@@ -714,16 +714,14 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 				float z2 = plane_z(&sector->flat[0].plane, v1);
 				float z3 = plane_z(&sector->flat[0].plane, v0);
 
-				float tu0 = 0;
-				float tv0 = z0;
-				float tu1 = vd_length;
-				float tv1 = z2;
+				float u0 = 0;
+				float u1 = vd_length;
 
 				if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, 0);
-				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
-				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
-				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
-				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], u0, z0);
+				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], u1, z1);
+				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], u1, z2);
+				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], u0, z3);
 				if (render->end_wall) render->end_wall(render);
 
 			} else {
@@ -735,17 +733,15 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 					float z2 = plane_z(&sector->flat[0].plane, v1);
 					float z3 = plane_z(&sector->flat[0].plane, v0);
 
-					float tu0 = 0;
-					float tv0 = z0;
-					float tu1 = vd_length;
-					float tv1 = z2;
+					float u0 = 0;
+					float u1 = vd_length;
 
 					if (z1 > z2 && z0 > z3) {
 						if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, -1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], u0, z0);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], u1, z1);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], u1, z2);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], u0, z3);
 						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
@@ -755,17 +751,15 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 					float z2 = plane_z(&sector->flat[1].plane, v1);
 					float z3 = plane_z(&sector->flat[1].plane, v0);
 
-					float tu0 = 0;
-					float tv0 = z0;
-					float tu1 = vd_length;
-					float tv1 = z2;
+					float u0 = 0;
+					float u1 = vd_length;
 
 					if (z1 < z2 && z0 < z3) {
 						if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, 1);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], u0, z3);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], u1, z2);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], u1, z1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], u0, z0);
 						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
