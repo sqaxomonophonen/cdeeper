@@ -38,7 +38,8 @@ static const char* font_shader_fragment_src =
 	"void main(void)\n"
 	"{\n"
 	"	float sample = texture2D(u_font_texture, v_uv).r;\n"
-	"	gl_FragColor = sample > 0.5 ? v_col : vec4(0,0,0,0);\n"
+	"	if (sample < 0.5) discard;\n"
+	"	gl_FragColor = v_col;\n"
 	"}\n";
 
 static void font_init_font6_texture(struct font* font)
