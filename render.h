@@ -6,6 +6,14 @@
 #include "shader.h"
 #include "lvl.h"
 
+#define MAX_WALLS (1024)
+
+struct render_wall {
+	GLuint texture;
+	int width;
+	int height;
+};
+
 struct render {
 	SDL_Window* window;
 
@@ -28,13 +36,15 @@ struct render {
 	int flat_index_n;
 	float current_select_u, current_select_v, current_light_level;
 
-	GLuint wall0_texture;
+	struct render_wall walls[1024];
 
 	GLuint wall_vertex_buffer;
 	GLuint wall_index_buffer;
 	float* wall_vertex_data;
 	int32_t* wall_index_data;
 	int wall_vertex_n;
+	int wall_current_texture, wall_next_texture;
+	int wall_enable;
 
 	struct lvl_entity* entity_cam;
 

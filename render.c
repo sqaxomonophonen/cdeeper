@@ -232,19 +232,36 @@ static void render_init_flats(struct render* render)
 
 static void render_init_walls(struct render* render)
 {
-	uint8_t* data;
-	int width = 0;
-	int height = 0;
-	AZ(mud_load_png_paletted("gfx/wall0.png", &data, &width, &height));
+	static char path[1024];
 
-	int level = 0;
-	int border = 0;
+	int index = 0;
 
-	glGenTextures(1, &render->wall0_texture); CHKGL;
-	glBindTexture(GL_TEXTURE_2D, render->wall0_texture); CHKGL;
-	glTexImage2D(GL_TEXTURE_2D, level, 1, width, height, border, GL_RED, GL_UNSIGNED_BYTE, data); CHKGL;
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); CHKGL;
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); CHKGL;
+	for (const char** name = names_walls; *name; name++) {
+		ASSERT(index <= MAX_WALLS);
+		struct render_wall* wall = &render->walls[index];
+
+		uint8_t* data;
+
+		strcpy(path, "gfx/");
+		strcat(path, *name);
+		strcat(path, ".png");
+
+		AZ(mud_load_png_paletted(path, &data, &wall->width, &wall->height));
+
+		int level = 0;
+		int border = 0;
+
+		glGenTextures(1, &wall->texture); CHKGL;
+		glBindTexture(GL_TEXTURE_2D, wall->texture); CHKGL;
+		glTexImage2D(GL_TEXTURE_2D, level, 1, wall->width, wall->height, border, GL_RED, GL_UNSIGNED_BYTE, data); CHKGL;
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); CHKGL;
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); CHKGL;
+
+		free(data);
+
+		index++;
+	}
+
 }
 
 static void render_init_framebuffers(struct render* render)
@@ -631,10 +648,27 @@ static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sec
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 	render->current_light_level = sector->light_level;
+
+	struct lvl_contour* contour = lvl_get_contour(lvl, contouri);
+	struct lvl_linedef* ld = lvl_get_linedef(lvl, contour->linedef);
+	uint32_t sdi = ld->sidedef[contour->usr&1];
+	ASSERT(sdi != -1);
+	struct lvl_sidedef* sd = lvl_get_sidedef(lvl, sdi);
+
+	int texture = sd->texture[dz <= 0 ? 0 : 1];
+	if (texture == render->wall_current_texture) {
+		render->wall_enable = 1;
+	} else {
+		render->wall_enable = 0;
+	}
+	if (texture > render->wall_current_texture && (render->wall_next_texture == -1 || texture < render->wall_next_texture)) {
+		render->wall_next_texture = texture;
+	}
 }
 
 static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
+	if (!render->wall_enable) return;
 	ASSERT(render->wall_vertex_n < RENDER_BUFSZ);
 	float* data = &render->wall_vertex_data[render->wall_vertex_n * FLOATS_PER_WALL_VERTEX];
 	int i = 0;
@@ -805,39 +839,46 @@ static void wall_callbacks(
 
 static void render_walls(struct render* render, struct lvl* lvl)
 {
-	render->wall_vertex_n = 0;
-
 	wall_callbacks(render, renderctx_begin_wall, renderctx_add_wall_vertex, NULL);
 
-	yield_walls(render, lvl);
+	render->wall_next_texture = -1;
 
-	shader_use(&render->wall_shader);
+	do {
+		render->wall_vertex_n = 0;
+		render->wall_current_texture = render->wall_next_texture;
+		render->wall_next_texture = -1;
+		yield_walls(render, lvl);
 
-	glActiveTexture(GL_TEXTURE0); CHKGL;
-	glEnable(GL_TEXTURE_2D); CHKGL;
-	glBindTexture(GL_TEXTURE_2D, render->wall0_texture); CHKGL;
+		if (render->wall_current_texture == -1) continue;
 
-	glBindBuffer(GL_ARRAY_BUFFER, render->wall_vertex_buffer); CHKGL;
-	glBufferSubData(GL_ARRAY_BUFFER, 0, render->wall_vertex_n * sizeof(float) * FLOATS_PER_WALL_VERTEX, render->wall_vertex_data); CHKGL;
+		shader_use(&render->wall_shader);
 
-	glEnableVertexAttribArray(render->wall_a_pos); CHKGL;
-	glVertexAttribPointer(render->wall_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, 0); CHKGL;
+		glActiveTexture(GL_TEXTURE0); CHKGL;
+		glEnable(GL_TEXTURE_2D); CHKGL;
+		glBindTexture(GL_TEXTURE_2D, render->walls[render->wall_current_texture].texture); CHKGL;
 
-	glEnableVertexAttribArray(render->wall_a_uv); CHKGL;
-	glVertexAttribPointer(render->wall_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
+		glBindBuffer(GL_ARRAY_BUFFER, render->wall_vertex_buffer); CHKGL;
+		glBufferSubData(GL_ARRAY_BUFFER, 0, render->wall_vertex_n * sizeof(float) * FLOATS_PER_WALL_VERTEX, render->wall_vertex_data); CHKGL;
 
-	glEnableVertexAttribArray(render->wall_a_light_level); CHKGL;
-	glVertexAttribPointer(render->wall_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
+		glEnableVertexAttribArray(render->wall_a_pos); CHKGL;
+		glVertexAttribPointer(render->wall_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, 0); CHKGL;
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->wall_index_buffer); CHKGL;
-	glDrawElements(GL_TRIANGLES, render->wall_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
+		glEnableVertexAttribArray(render->wall_a_uv); CHKGL;
+		glVertexAttribPointer(render->wall_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
 
-	glDisableVertexAttribArray(render->wall_a_light_level); CHKGL;
-	glDisableVertexAttribArray(render->wall_a_uv); CHKGL;
-	glDisableVertexAttribArray(render->wall_a_pos); CHKGL;
+		glEnableVertexAttribArray(render->wall_a_light_level); CHKGL;
+		glVertexAttribPointer(render->wall_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
 
-	glActiveTexture(GL_TEXTURE0); CHKGL;
-	glDisable(GL_TEXTURE_2D); CHKGL;
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->wall_index_buffer); CHKGL;
+		glDrawElements(GL_TRIANGLES, render->wall_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
+
+		glDisableVertexAttribArray(render->wall_a_light_level); CHKGL;
+		glDisableVertexAttribArray(render->wall_a_uv); CHKGL;
+		glDisableVertexAttribArray(render->wall_a_pos); CHKGL;
+
+		glActiveTexture(GL_TEXTURE0); CHKGL;
+		glDisable(GL_TEXTURE_2D); CHKGL;
+	} while (render->wall_next_texture != -1);
 }
 
 static void render_step(struct render* render)

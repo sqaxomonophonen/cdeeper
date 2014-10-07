@@ -134,6 +134,7 @@ int main(int argc, char** argv)
 		ED_NONE = 1,
 		ED_FLAT_Z,
 		ED_FLAT_TEXTURE,
+		ED_SIDEDEF_TEXTURE,
 		ED_LIGHT_LEVEL
 	//} ed = ED_FLAT_Z;
 	} ed = ED_NONE;
@@ -172,13 +173,16 @@ int main(int argc, char** argv)
 						ed = ED_NONE;
 						break;
 					case SDLK_1:
-						ed = ED_FLAT_Z;
+						ed = ED_LIGHT_LEVEL;
 						break;
 					case SDLK_2:
-						ed = ED_FLAT_TEXTURE;
+						ed = ED_FLAT_Z;
 						break;
 					case SDLK_3:
-						ed = ED_LIGHT_LEVEL;
+						ed = ED_FLAT_TEXTURE;
+						break;
+					case SDLK_4:
+						ed = ED_SIDEDEF_TEXTURE;
 						break;
 				}
 			}
@@ -278,6 +282,26 @@ int main(int argc, char** argv)
 					}
 				}
 			}
+			if (ed == ED_SIDEDEF_TEXTURE) {
+				for (int i = 0; i < lvl.n_sectors; i++) {
+					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
+
+					for (int j = 0; j < sector->contourn; j++) {
+						int32_t ci = sector->contour0 + j;
+						struct lvl_contour* c = lvl_get_contour(&lvl, ci);
+						struct lvl_linedef* ld = lvl_get_linedef(&lvl, c->linedef);
+						uint32_t sdi = ld->sidedef[c->usr&1];
+						ASSERT(sdi != -1);
+						struct lvl_sidedef* sd = lvl_get_sidedef(&lvl, sdi);
+						if (sd->usr & LVL_SELECTED_ZMINUS) {
+							sd->texture[0] = clampi(sd->texture[0] + mouse_z, 0, names_number_of_walls()-1);
+						}
+						if (sd->usr & LVL_SELECTED_ZPLUS) {
+							sd->texture[1] = clampi(sd->texture[1] + mouse_z, 0, names_number_of_walls()-1);
+						}
+					}
+				}
+			}
 			if (ed == ED_LIGHT_LEVEL) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
@@ -347,6 +371,9 @@ int main(int argc, char** argv)
 			if (ed == ED_FLAT_Z || ed == ED_FLAT_TEXTURE) {
 				lvl_tag_flats(&lvl, &trace_result, clicked);
 			}
+			if (ed == ED_SIDEDEF_TEXTURE) {
+				lvl_tag_sidedefs(&lvl, &trace_result, clicked);
+			}
 			if (ed == ED_LIGHT_LEVEL) {
 				lvl_tag_sectors(&lvl, &trace_result, clicked);
 			}
@@ -363,6 +390,7 @@ int main(int argc, char** argv)
 				ed == ED_NONE ? "none" :
 				ed == ED_FLAT_Z ? "flat z" :
 				ed == ED_FLAT_TEXTURE ? "flat texture" :
+				ed == ED_SIDEDEF_TEXTURE ? "sidedef texture" :
 				ed == ED_LIGHT_LEVEL ? "light level" :
 				"???"
 			);

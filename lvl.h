@@ -36,9 +36,8 @@ struct lvl_linedef {
 struct lvl_sidedef {
 	int32_t sector;
 	uint32_t usr;
-	//int32_t material[2]; // -1: not defined
+	int32_t texture[2];
 	//struct mat23 tx[2]; // texture transform, one per material
-	//uint32_t flags;
 };
 
 struct lvl_contour {

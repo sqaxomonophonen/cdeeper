@@ -24,3 +24,24 @@ int names_find_flat(const char* name)
 	arghf("flat '%s' not found\n", name);
 }
 
+
+const char* names_walls[] = { "wall0", "wall1", NULL };
+
+int names_number_of_walls()
+{
+	int i = 0;
+	for (const char** wall = names_walls; *wall; wall++) i++;
+	return i;
+}
+
+int names_find_wall(const char* name)
+{
+	int i = 0;
+	for (const char** wall = names_walls; *wall; wall++) {
+		if (strcmp(name, *wall) == 0) {
+			return i;
+		}
+		i++;
+	}
+	arghf("wall '%s' not found\n", name);
+}

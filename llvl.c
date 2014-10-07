@@ -177,6 +177,21 @@ static void read_sidedefs(lua_State* L, struct lvl* lvl, const char* name)
 		sd->sector = lua_tointeger(L, -1) - 1;
 		lua_pop(L, 1);
 
+		lua_getfield(L, -1, "texture");
+		if (lua_isnil(L, -1)) {
+			sd->texture[0] = sd->texture[1] = 0;
+		} else {
+			if (!lua_istable(L, -1)) arghf("expected r[\"sidedefs\"][%d][\"texture\"] to be a table in '%s'", i, name);
+			if (lua_objlen(L, -1) != 2) arghf("expected r[\"sidedefs\"][%d][\"texture\"] to be a table with two elements in '%s'", i, name);
+			for (int j = 0; j < 2; j++) {
+				lua_rawgeti(L, -1, j+1);
+				if (!lua_isstring(L, -1)) arghf("expected r[\"sidedefs\"][%d][\"texture\"][%d] to be a string in '%s'", i, j+1, name);
+				sd->texture[j] = names_find_wall(lua_tostring(L, -1));
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 1);
+
 		lua_pop(L, 1);
 	}
 
@@ -296,6 +311,29 @@ static void write_sectors(lua_State* L, struct lvl* lvl)
 	lua_pop(L, 1);
 }
 
+static void write_sidedefs(lua_State* L, struct lvl* lvl)
+{
+	lua_getfield(L, -1, "sidedefs");
+	if (!lua_istable(L, -1)) arghf("expected r[\"sidedefs\"] to be a table");
+
+	for (int i = 0; i < lvl->n_sidedefs; i++) {
+		struct lvl_sidedef* sidedef = lvl_get_sidedef(lvl, i);
+		lua_rawgeti(L, -1, i+1);
+		if (!lua_istable(L, -1)) arghf("expected r[\"sidedefs\"][%d] to be a table", i+1);
+
+		lua_newtable(L);
+		for (int j = 0; j < 2; j++) {
+			lua_pushstring(L, names_walls[clampi(sidedef->texture[j], 0, names_number_of_walls()-1)]);
+			lua_rawseti(L, -2, j+1);
+		}
+		lua_setfield(L, -2, "texture");
+
+		lua_pop(L, 1);
+	}
+
+	lua_pop(L, 1);
+}
+
 void llvl_save(const char* name, struct lvl* lvl)
 {
 	lua_State* L = luaL_newstate();
@@ -309,6 +347,7 @@ void llvl_save(const char* name, struct lvl* lvl)
 	loadlua(L, name);
 
 	write_sectors(L, lvl);
+	write_sidedefs(L, lvl);
 
 	lua_pushstring(L, "lson brick"); // comment
 
