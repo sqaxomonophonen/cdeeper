@@ -305,7 +305,7 @@ int main(int argc, char** argv)
 			if (ed == ED_LIGHT_LEVEL) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-					float d = mouse_z * 0.025f;
+					float d = mouse_z * 0.0125f;
 					if (sector->usr & LVL_SELECTED_ZMINUS) {
 						sector->light_level += d;
 						if (sector->light_level < 0) sector->light_level = 0;
