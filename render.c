@@ -144,7 +144,8 @@ static const char* step_shader_fragment_src =
 	"	float brite = 1-sample.g;\n"
 	"	int d = int(v_uv.x) + int(v_uv.y);\n"
 	"	if ((d&1) == 0) {\n"
-	"		brite += 1.0f/32.0f;\n" // half a brightness level
+	"		float halfstep = 1.0f / (float(" STR_VALUE(MAGIC_NUM_LIGHT_LEVELS) ")*2.0);\n"
+	"		brite += halfstep;\n"
 	"	}\n"
 	"	gl_FragColor = texture2D(u_palette_lookup, vec2(index, brite));\n"
 	"}\n";
