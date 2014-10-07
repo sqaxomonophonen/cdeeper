@@ -15,7 +15,7 @@
 struct lvl_flat {
 	struct plane plane; // local to vertex 0
 	int32_t texture;
-	//struct mat23 tx; // texture transform
+	struct mat23 tx;
 };
 
 struct lvl_sector {
@@ -37,7 +37,7 @@ struct lvl_sidedef {
 	int32_t sector;
 	uint32_t usr;
 	int32_t texture[2];
-	//struct mat23 tx[2]; // texture transform, one per material
+	struct mat23 tx[2];
 };
 
 struct lvl_contour {

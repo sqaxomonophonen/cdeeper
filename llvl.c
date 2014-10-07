@@ -4,6 +4,7 @@
 
 #include "llvl.h"
 #include "a.h"
+#include "m.h"
 #include "names.h"
 
 static void setup_package_path(lua_State* L)
@@ -99,6 +100,17 @@ static void read_vertices(lua_State* L, struct lvl* lvl, const char* name)
 	lua_pop(L, 1);
 }
 
+static void read_tx(lua_State* L, struct mat23* tx)
+{
+	if (!lua_istable(L, -1)) arghf("expected tx to be a table");
+	if (lua_objlen(L, -1) != 6) arghf("expected tx to have 6 elements");
+	for (int i = 0; i < 6; i++) {
+		lua_rawgeti(L, -1, i+1);
+		tx->s[i] = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+	}
+}
+
 static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 {
 	struct lvl_flat* flat = &sector->flat[index];
@@ -123,6 +135,14 @@ static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 		flat->texture = 0;
 	} else {
 		flat->texture = names_find_flat(lua_tostring(L, -1));
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, -1, "tx");
+	if (lua_isnil(L, -1)) {
+		mat23_identity(&flat->tx);
+	} else {
+		read_tx(L, &flat->tx);
 	}
 	lua_pop(L, 1);
 
@@ -265,6 +285,15 @@ void llvl_load(const char* name, struct lvl* lvl)
 	lua_close(L);
 }
 
+static void push_tx(lua_State* L, struct mat23* tx)
+{
+	lua_newtable(L);
+	for (int i = 0; i < 6; i++) {
+		lua_pushnumber(L, tx->s[i]);
+		lua_rawseti(L, -2, i+1);
+	}
+}
+
 static void write_flat(lua_State* L, struct lvl_sector* sector, int index)
 {
 	struct lvl_flat* flat = &sector->flat[index];
@@ -285,6 +314,9 @@ static void write_flat(lua_State* L, struct lvl_sector* sector, int index)
 
 	lua_pushstring(L, names_flats[clampi(flat->texture, 0, names_number_of_flats()-1)]);
 	lua_setfield(L, -2, "texture");
+
+	push_tx(L, &flat->tx);
+	lua_setfield(L, -2, "tx");
 
 	lua_pop(L, 2);
 }

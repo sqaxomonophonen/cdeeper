@@ -129,20 +129,25 @@ int main(int argc, char** argv)
 	int mouse_y = 0;
 
 	int frame = 1;
+	int tooling = 0;
 
 	enum {
 		ED_NONE = 1,
 		ED_FLAT_Z,
 		ED_FLAT_TEXTURE,
+		ED_FLAT_TEXTURE_TRANSLATE,
 		ED_SIDEDEF_TEXTURE,
 		ED_LIGHT_LEVEL
 	//} ed = ED_FLAT_Z;
 	} ed = ED_NONE;
 
+
 	while (!exiting) {
 		SDL_Event e;
-		int clicked = 0;
-		int mouse_z = 0;
+		int do_select = 0;
+		float tool_dx = 0;
+		float tool_dy = 0;
+
 		while (SDL_PollEvent(&e)) {
 			if (e.type == SDL_QUIT) {
 				exiting = 1;
@@ -182,6 +187,9 @@ int main(int argc, char** argv)
 						ed = ED_FLAT_TEXTURE;
 						break;
 					case SDLK_4:
+						ed = ED_FLAT_TEXTURE_TRANSLATE;
+						break;
+					case SDLK_5:
 						ed = ED_SIDEDEF_TEXTURE;
 						break;
 				}
@@ -202,16 +210,33 @@ int main(int argc, char** argv)
 			if (e.type == SDL_MOUSEMOTION) {
 				mouse_x = e.motion.x;
 				mouse_y = e.motion.y;
+				if (tooling) {
+					float scale = 0.1f;
+					tool_dx -= (float)e.motion.xrel * scale;
+					tool_dy -= (float)e.motion.yrel * scale;
+				}
+
 			}
 
 			if (e.type == SDL_MOUSEBUTTONDOWN) {
-				clicked = 1;
+				int button = e.button.button;
+				if (button == 1) {
+					tooling = 1;
+				}
+				if (button == 3) {
+					do_select = 1;
+				}
+			}
+
+			if (e.type == SDL_MOUSEBUTTONUP) {
+				int button = e.button.button;
+				if (button == 1) {
+					tooling = 0;
+				}
 			}
 
 			if (e.type == SDL_MOUSEWHEEL) {
-				mouse_z = e.wheel.y;
-				//printf("%d %d\n", e.wheel.x, e.wheel.y);
-				//return 1;
+				tool_dy += e.wheel.y;
 			}
 		}
 
@@ -237,32 +262,42 @@ int main(int argc, char** argv)
 		move.s[0] = 0;
 		move.s[1] = 0;
 
-		if (ctrl_strafe_left || ctrl_strafe_right) {
-			float strafe_speed = 7;
-			float sgn = 0;
-			if (ctrl_strafe_left) sgn -= 1.0f;
-			if (ctrl_strafe_right) sgn += 1.0f;
-			move.s[0] += cosf(DEG2RAD(player.yaw)) * strafe_speed * sgn;
-			move.s[1] += sinf(DEG2RAD(player.yaw)) * strafe_speed * sgn;
-		}
+		struct vec2 forward;
+		vec2_angle(&forward, player.yaw);
+		struct vec2 right;
+		vec2_normal(&right, &forward);
 
 		if (ctrl_forward || ctrl_backward) {
 			float move_speed = 12;
 			float sgn = 0;
 			if (ctrl_forward) sgn -= 1.0f;
 			if (ctrl_backward) sgn += 1.0f;
-			move.s[0] += -sinf(DEG2RAD(player.yaw)) * move_speed * sgn;
-			move.s[1] += cosf(DEG2RAD(player.yaw)) * move_speed * sgn;
+			struct vec2 dmove;
+			vec2_copy(&dmove, &forward);
+			vec2_scalei(&dmove, move_speed * sgn);
+			vec2_addi(&move, &dmove);
 		}
+
+		if (ctrl_strafe_left || ctrl_strafe_right) {
+			float strafe_speed = 7;
+			float sgn = 0;
+			if (ctrl_strafe_left) sgn -= 1.0f;
+			if (ctrl_strafe_right) sgn += 1.0f;
+			struct vec2 dmove;
+			vec2_copy(&dmove, &right);
+			vec2_scalei(&dmove, strafe_speed * sgn);
+			vec2_addi(&move, &dmove);
+		}
+
 
 		lvl_entity_clipmove(&lvl, &player, &move);
 
 
-		if (mouse_z) {
+		if (tool_dx != 0 || tool_dy != 0) {
 			if (ed == ED_FLAT_Z) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-					float d = mouse_z * 8;
+					float d = tool_dy * 8;
 					if (sector->usr & LVL_SELECTED_ZMINUS) {
 						sector->flat[0].plane.s[3] -= d;
 					}
@@ -271,14 +306,26 @@ int main(int argc, char** argv)
 					}
 				}
 			}
-			if (ed == ED_FLAT_TEXTURE) {
+			if (ed == ED_FLAT_TEXTURE || ed == ED_FLAT_TEXTURE_TRANSLATE) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-					if (sector->usr & LVL_SELECTED_ZMINUS) {
-						sector->flat[0].texture = clampi(sector->flat[0].texture + mouse_z, 0, names_number_of_flats()-1);
-					}
-					if (sector->usr & LVL_SELECTED_ZPLUS) {
-						sector->flat[1].texture = clampi(sector->flat[1].texture + mouse_z, 0, names_number_of_flats()-1);
+
+					for (int flati = 0; flati < 2; flati++) {
+						if (sector->usr & (flati == 0 ? LVL_SELECTED_ZMINUS : LVL_SELECTED_ZPLUS)) {
+							struct lvl_flat* flat = &sector->flat[flati];
+							if (ed == ED_FLAT_TEXTURE) {
+								flat->texture = clampi(flat->texture + (int)tool_dy, 0, names_number_of_flats()-1);
+							}
+							if (ed == ED_FLAT_TEXTURE_TRANSLATE) {
+								struct vec2 d;
+								vec2_zero(&d);
+								vec2_add_scalei(&d, &forward, tool_dy);
+								vec2_add_scalei(&d, &right, tool_dx);
+								vec2_scalei(&d, 2.5f);
+								flat->tx.s[4] += d.s[0];
+								flat->tx.s[5] += d.s[1];
+							}
+						}
 					}
 				}
 			}
@@ -294,10 +341,10 @@ int main(int argc, char** argv)
 						ASSERT(sdi != -1);
 						struct lvl_sidedef* sd = lvl_get_sidedef(&lvl, sdi);
 						if (sd->usr & LVL_SELECTED_ZMINUS) {
-							sd->texture[0] = clampi(sd->texture[0] + mouse_z, 0, names_number_of_walls()-1);
+							sd->texture[0] = clampi(sd->texture[0] + (int)tool_dy, 0, names_number_of_walls()-1);
 						}
 						if (sd->usr & LVL_SELECTED_ZPLUS) {
-							sd->texture[1] = clampi(sd->texture[1] + mouse_z, 0, names_number_of_walls()-1);
+							sd->texture[1] = clampi(sd->texture[1] + (int)tool_dy, 0, names_number_of_walls()-1);
 						}
 					}
 				}
@@ -305,7 +352,7 @@ int main(int argc, char** argv)
 			if (ed == ED_LIGHT_LEVEL) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-					float d = mouse_z * 0.0125f;
+					float d = tool_dy * 0.0125f;
 					if (sector->usr & LVL_SELECTED_ZMINUS) {
 						sector->light_level += d;
 						if (sector->light_level < 0) sector->light_level = 0;
@@ -368,14 +415,14 @@ int main(int argc, char** argv)
 
 			lvl_tag_clear_highlights(&lvl);
 
-			if (ed == ED_FLAT_Z || ed == ED_FLAT_TEXTURE) {
-				lvl_tag_flats(&lvl, &trace_result, clicked);
+			if (ed == ED_FLAT_Z || ed == ED_FLAT_TEXTURE || ed == ED_FLAT_TEXTURE_TRANSLATE) {
+				lvl_tag_flats(&lvl, &trace_result, do_select);
 			}
 			if (ed == ED_SIDEDEF_TEXTURE) {
-				lvl_tag_sidedefs(&lvl, &trace_result, clicked);
+				lvl_tag_sidedefs(&lvl, &trace_result, do_select);
 			}
 			if (ed == ED_LIGHT_LEVEL) {
-				lvl_tag_sectors(&lvl, &trace_result, clicked);
+				lvl_tag_sectors(&lvl, &trace_result, do_select);
 			}
 
 			render_set_entity_cam(&render, &player);
@@ -390,6 +437,7 @@ int main(int argc, char** argv)
 				ed == ED_NONE ? "none" :
 				ed == ED_FLAT_Z ? "flat z" :
 				ed == ED_FLAT_TEXTURE ? "flat texture" :
+				ed == ED_FLAT_TEXTURE_TRANSLATE ? "flat texture translate" :
 				ed == ED_SIDEDEF_TEXTURE ? "sidedef texture" :
 				ed == ED_LIGHT_LEVEL ? "light level" :
 				"???"

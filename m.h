@@ -17,7 +17,8 @@ void vec2_normalize(struct vec2* v);
 void vec2_zero(struct vec2* v);
 void vec2_copy(struct vec2* dst, struct vec2* src);
 //float vec2_distance(struct vec2* a, struct vec2* b);
-
+void vec2_angle(struct vec2* v, float degrees);
+void vec2_add_scalei(struct vec2* dst, struct vec2* src, float scalar);
 
 
 struct vec3 {
@@ -53,11 +54,14 @@ struct mat33 {
 void mat33_apply(struct mat33* m, struct vec3* dst, struct vec3* src);
 void mat33_applyi(struct mat33* m, struct vec3* v);
 
-/*
 struct mat23 {
 	float s[6];
 };
-*/
+
+void mat23_apply(struct mat23* m, struct vec2* dst, struct vec2* src);
+void mat23_applyi(struct mat23* m, struct vec2* v);
+void mat23_identity(struct mat23* m);
+void mat23_translate(struct mat23* m, struct vec2* t);
 
 struct plane {
 	float s[4];

@@ -540,6 +540,7 @@ static void renderctx_add_flat_triangle(struct render* render, uint32_t indices[
 static void yield_flat_partial(struct render* render, struct lvl* lvl, int sectori, int flati)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
+	struct lvl_flat* flat = &sector->flat[flati];
 
 	TESSalloc ta;
 
@@ -604,16 +605,19 @@ static void yield_flat_partial(struct render* render, struct lvl* lvl, int secto
 	int nverts = tessGetVertexCount(t);
 	const float* verts = tessGetVertices(t);
 	for (int i = 0; i < nverts; i++) {
-		struct plane* plane = &sector->flat[flati].plane;
+		struct plane* plane = &flat->plane;
 		struct vec2 v;
 		v.s[0] = verts[i*2];
 		v.s[1] = verts[i*2+1];
 		float z = plane_z(plane, &v);
+		struct vec2 uv;
+		vec2_copy(&uv, &v);
+		mat23_applyi(&flat->tx, &uv);
 		AN(render->add_flat_vertex);
 		render->add_flat_vertex(
 			render,
 			v.s[0], z, v.s[1], // XYZ
-			v.s[0], v.s[1] // UV
+			uv.s[0], uv.s[1]
 		);
 	}
 

@@ -93,6 +93,20 @@ void vec2_copy(struct vec2* dst, struct vec2* src)
 	}
 }
 
+void vec2_angle(struct vec2* v, float degrees)
+{
+	float rad = DEG2RAD(degrees);
+	v->s[0] = -sinf(rad);
+	v->s[1] = cosf(rad);
+}
+
+void vec2_add_scalei(struct vec2* dst, struct vec2* src, float scalar)
+{
+	for (int i = 0; i < 2; i++) {
+		dst->s[i] += src->s[i] * scalar;
+	}
+}
+
 void vec3_to_vec2(struct vec3* v3, struct vec2* v2)
 {
 	for (int i = 0; i < 2; i++) {
@@ -304,3 +318,22 @@ void mat33_applyi(struct mat33* m, struct vec3* v)
 	vec3_copy(v, &dst);
 }
 
+void mat23_identity(struct mat23* m)
+{
+	m->s[0] = 1; m->s[1] = 0;
+	m->s[2] = 0; m->s[3] = 1;
+	m->s[4] = 0; m->s[5] = 0;
+}
+
+void mat23_apply(struct mat23* m, struct vec2* dst, struct vec2* src)
+{
+	dst->s[0] = m->s[0] * src->s[0] + m->s[2] * src->s[1] + m->s[4];
+	dst->s[1] = m->s[1] * src->s[0] + m->s[3] * src->s[1] + m->s[5];
+}
+
+void mat23_applyi(struct mat23* m, struct vec2* v)
+{
+	struct vec2 dst;
+	mat23_apply(m, &dst, v);
+	vec2_copy(v, &dst);
+}
