@@ -79,5 +79,13 @@ float ray_plane_intersection(struct vec3* position, struct vec3* origin, struct 
 
 #define DEG2RAD(x) (x/180.0f*M_PI)
 
+
+static inline int clampi(int i, int min, int max)
+{
+	if (i < min) return min;
+	if (i > max) return max;
+	return i;
+}
+
 #endif//M_H
 

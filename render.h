@@ -26,6 +26,7 @@ struct render {
 	int flat_vertex_n;
 	int flat_offset;;
 	int flat_index_n;
+	float current_select_u, current_select_v, current_light_level;
 
 	GLuint wall0_texture;
 
@@ -63,9 +64,7 @@ struct render {
 	void (*add_flat_vertex)(
 		struct render* render,
 		float x, float y, float z,
-		float u, float v,
-		float select_u, float select_v,
-		float light_level
+		float u, float v
 	);
 	void (*add_flat_triangle)(
 		struct render* render,
@@ -76,14 +75,14 @@ struct render {
 	void (*begin_wall)(
 		struct render* render,
 		struct lvl* lvl,
+		int sectori,
 		int contouri,
 		int dz
 	);
 	void (*add_wall_vertex)(
 		struct render* render,
 		float x, float y, float z,
-		float u, float v,
-		float light_level
+		float u, float v
 	);
 	void (*end_wall)(struct render* render);
 
@@ -99,6 +98,7 @@ float render_get_fovy(struct render* render);
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity);
 void render_lvl_geom(struct render* render, struct lvl* lvl);
 void render_begin2d(struct render* render);
+void render_flat_selector(struct render* render, int page, int highlight);
 void render_flip(struct render* render);
 void render_lvl_tags(struct render* render, struct lvl* lvl);
 

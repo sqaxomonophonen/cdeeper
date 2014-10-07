@@ -14,7 +14,7 @@
 
 struct lvl_flat {
 	struct plane plane; // local to vertex 0
-	//int32_t material;
+	int32_t texture;
 	//struct mat23 tx; // texture transform
 };
 

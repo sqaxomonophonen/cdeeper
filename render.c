@@ -1,3 +1,4 @@
+#include "names.h"
 #include "magic.h"
 #include "render.h"
 #include "mud.h"
@@ -174,8 +175,6 @@ static void render_init_palette_table(struct render* render)
 	free(palette_table);
 }
 
-static const char* flats[] = { "flat0", NULL };
-
 static void render_init_flats(struct render* render)
 {
 	static char path[1024];
@@ -187,7 +186,7 @@ static void render_init_flats(struct render* render)
 	int flats_per_row_exp = MAGIC_FLAT_ATLAS_SIZE_EXP - MAGIC_FLAT_SIZE_EXP;
 
 	int slot = 0;
-	for (const char** flat = flats; *flat; flat++) {
+	for (const char** flat = names_flats; *flat; flat++) {
 		uint8_t* data;
 		int width = 0;
 		int height = 0;
@@ -478,7 +477,7 @@ static void tess_free(void* usr, void* ptr)
 }
 
 
-static void renderctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v, float light_level)
+static void renderctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
 	ASSERT(render->flat_vertex_n < RENDER_BUFSZ);
 	float* data = &render->flat_vertex_data[render->flat_vertex_n * FLOATS_PER_FLAT_VERTEX];
@@ -488,16 +487,28 @@ static void renderctx_add_flat_vertex(struct render* render, float x, float y, f
 	data[i++] = z;
 	data[i++] = u;
 	data[i++] = v;
-	data[i++] = select_u;
-	data[i++] = select_v;
-	data[i++] = light_level;
+	data[i++] = render->current_select_u;
+	data[i++] = render->current_select_v;
+	data[i++] = render->current_light_level;
 	//printf("%f %f %f\n", x, y, z);
 	render->flat_vertex_n++;
+}
+
+static void resolve_select(int i, float* select_u, float* select_v)
+{
+	ASSERT(i >= 0 && i < 256);
+	*select_u = (i << MAGIC_FLAT_SIZE_EXP) & (MAGIC_FLAT_ATLAS_SIZE - 1);
+	*select_v = (i >> (MAGIC_FLAT_ATLAS_SIZE_EXP - MAGIC_FLAT_SIZE_EXP)) << MAGIC_FLAT_SIZE_EXP;
 }
 
 static void renderctx_begin_flat(struct render* render, struct lvl* lvl, int sectori, int flati)
 {
 	render->flat_offset = render->flat_vertex_n;
+	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
+	struct lvl_flat* flat = &sector->flat[flati];
+
+	resolve_select(flat->texture, &render->current_select_u, &render->current_select_v);
+	render->current_light_level = sector->light_level;
 }
 
 static void renderctx_add_flat_triangle(struct render* render, uint32_t indices[3])
@@ -511,7 +522,6 @@ static void renderctx_add_flat_triangle(struct render* render, uint32_t indices[
 static void yield_flat_partial(struct render* render, struct lvl* lvl, int sectori, int flati)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-	float ll = sector->light_level;
 
 	TESSalloc ta;
 
@@ -585,9 +595,7 @@ static void yield_flat_partial(struct render* render, struct lvl* lvl, int secto
 		render->add_flat_vertex(
 			render,
 			v.s[0], z, v.s[1], // XYZ
-			v.s[0], v.s[1], // UV
-			0, 0, // selector (XXX TODO FIXME get from texture)
-			ll
+			v.s[0], v.s[1] // UV
 		);
 	}
 
@@ -619,8 +627,13 @@ static void yield_flats(struct render* render, struct lvl* lvl)
 	}
 
 }
+static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz)
+{
+	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
+	render->current_light_level = sector->light_level;
+}
 
-static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v, float light_level)
+static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
 	ASSERT(render->wall_vertex_n < RENDER_BUFSZ);
 	float* data = &render->wall_vertex_data[render->wall_vertex_n * FLOATS_PER_WALL_VERTEX];
@@ -630,18 +643,17 @@ static void renderctx_add_wall_vertex(struct render* render, float x, float y, f
 	data[i++] = z;
 	data[i++] = u;
 	data[i++] = v;
-	data[i++] = light_level;
+	data[i++] = render->current_light_level;
 	render->wall_vertex_n++;
 }
 
 static void yield_walls(struct render* render, struct lvl* lvl)
 {
-	for (int i = 0; i < lvl->n_sectors; i++) {
-		struct lvl_sector* sector = lvl_get_sector(lvl, i);
-		float ll = sector->light_level;
+	for (int sectori = 0; sectori < lvl->n_sectors; sectori++) {
+		struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 
-		for (int i = 0; i < sector->contourn; i++) {
-			int ci = sector->contour0 + i;
+		for (int cdi = 0; cdi < sector->contourn; cdi++) {
+			int ci = sector->contour0 + cdi;
 
 			struct lvl_contour* c = lvl_get_contour(lvl, ci);
 			struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
@@ -672,11 +684,11 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 				float tu1 = vd_length;
 				float tv1 = z2;
 
-				if (render->begin_wall) render->begin_wall(render, lvl, ci, 0);
-				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0, ll);
-				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0, ll);
-				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1, ll);
-				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1, ll);
+				if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, 0);
+				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
+				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
+				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
+				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
 				if (render->end_wall) render->end_wall(render);
 
 			} else {
@@ -694,11 +706,11 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 					float tv1 = z2;
 
 					if (z1 > z2 && z0 > z3) {
-						if (render->begin_wall) render->begin_wall(render, lvl, ci, -1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0, ll);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0, ll);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1, ll);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1, ll);
+						if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, -1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv0);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv0);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv1);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv1);
 						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
@@ -714,11 +726,11 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 					float tv1 = z2;
 
 					if (z1 < z2 && z0 < z3) {
-						if (render->begin_wall) render->begin_wall(render, lvl, ci, 1);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0, ll);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0, ll);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1, ll);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1, ll);
+						if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, 1);
+						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], tu0, tv0);
+						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], tu1, tv0);
+						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], tu1, tv1);
+						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], tu0, tv1);
 						if (render->end_wall) render->end_wall(render);
 					} // XXX else: crossing?
 				}
@@ -739,9 +751,7 @@ static void flat_callbacks(
 	void (*add_flat_vertex)(
 		struct render* render,
 		float x, float y, float z,
-		float u, float v,
-		float select_u, float select_v,
-		float light_level
+		float u, float v
 	),
 	void (*add_flat_triangle)(
 		struct render* render,
@@ -768,18 +778,20 @@ static void wall_callbacks(
 	void (*begin_wall)(
 		struct render* render,
 		struct lvl* lvl,
+		int sectori,
 		int contouri,
 		int dz
 	),
 	void (*add_wall_vertex)(
 		struct render* render,
 		float x, float y, float z,
-		float u, float v,
-		float light_level
+		float u, float v
 	),
 	void (*end_wall)(struct render* render))
 {
+	AN(begin_wall);
 	AN(add_wall_vertex);
+
 	render->begin_wall = begin_wall;
 	render->add_wall_vertex = add_wall_vertex;
 	render->end_wall = end_wall;
@@ -795,7 +807,7 @@ static void render_walls(struct render* render, struct lvl* lvl)
 {
 	render->wall_vertex_n = 0;
 
-	wall_callbacks(render, NULL, renderctx_add_wall_vertex, NULL);
+	wall_callbacks(render, renderctx_begin_wall, renderctx_add_wall_vertex, NULL);
 
 	yield_walls(render, lvl);
 
@@ -1040,7 +1052,7 @@ static void tagsctx_begin_flat(struct render* render, struct lvl* lvl, int secto
 	}
 }
 
-static void tagsctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v, float select_u, float select_v, float light_level)
+static void tagsctx_add_flat_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
 	if (render->tags_flat_vertex_n < 0) return;
 	struct vec3 p;
@@ -1070,7 +1082,7 @@ static void tagsctx_end_flat(struct render* render)
 	glEnd();
 }
 
-static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int contouri, int dz)
+static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz)
 {
 	struct lvl_contour* c = lvl_get_contour(lvl, contouri);
 	struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
@@ -1083,7 +1095,7 @@ static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int conto
 	glBegin(GL_QUADS);
 }
 
-static void tagsctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v, float light_level)
+static void tagsctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
 	glVertex3f(x,y,z);
 }

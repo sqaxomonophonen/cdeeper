@@ -103,6 +103,8 @@ static void read_vertices(lua_State* L, struct lvl* lvl, const char* name)
 
 static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 {
+	struct lvl_flat* flat = &sector->flat[index];
+
 	lua_getfield(L, -1, "flat");
 	if (!lua_istable(L, -1)) arghf("expected \"flat\" to be a table");
 	lua_rawgeti(L, -1, index+1);
@@ -112,9 +114,12 @@ static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
 	for (int i = 0; i < 4; i++) {
 		lua_rawgeti(L, -1, i+1);
-		sector->flat[index].plane.s[i] = lua_tointeger(L, -1);
+		flat->plane.s[i] = lua_tointeger(L, -1);
 		lua_pop(L, 1);
 	}
+
+	flat->texture = 0; // XXX TODO
+
 	lua_pop(L, 3);
 }
 

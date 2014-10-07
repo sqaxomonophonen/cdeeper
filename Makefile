@@ -20,13 +20,16 @@ dgfx: dgfx/palette_table.png
 
 res: dgfx
 
+names.o: names.c names.h
+	$(CC) $(CFLAGS) -c names.c
+
 a.o: a.c a.h
 	$(CC) $(CFLAGS) -c a.c
 
 m.o: m.c m.h
 	$(CC) $(CFLAGS) -c m.c
 
-render.o: render.c render.h shader.h
+render.o: render.c render.h shader.h names.h
 	$(CC) $(CFLAGS) -c render.c
 
 mud.o: mud.c mud.h
@@ -47,8 +50,8 @@ llvl.o: llvl.c llvl.h lvl.h
 finished.o: finished.c
 	$(CC) $(CFLAGS) -c finished.c
 
-finished: res render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
-	$(CC) $(LINK) render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
+finished: res names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
+	$(CC) $(LINK) names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
 
 clean:
 	rm -rf *.o finished dgfx/*

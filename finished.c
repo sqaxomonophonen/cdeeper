@@ -132,6 +132,7 @@ int main(int argc, char** argv)
 	enum {
 		ED_NONE = 1,
 		ED_FLAT_Z,
+		ED_FLAT_TEXTURE,
 		ED_LIGHT_LEVEL
 	//} ed = ED_FLAT_Z;
 	} ed = ED_NONE;
@@ -173,6 +174,9 @@ int main(int argc, char** argv)
 						ed = ED_FLAT_Z;
 						break;
 					case SDLK_2:
+						ed = ED_FLAT_TEXTURE;
+						break;
+					case SDLK_3:
 						ed = ED_LIGHT_LEVEL;
 						break;
 				}
@@ -262,12 +266,25 @@ int main(int argc, char** argv)
 					}
 				}
 			}
+			if (ed == ED_FLAT_TEXTURE) {
+				for (int i = 0; i < lvl.n_sectors; i++) {
+					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
+					if (sector->usr & LVL_SELECTED_ZMINUS) {
+						sector->flat[0].texture = clampi(sector->flat[0].texture + mouse_z, 0, 255);
+					}
+					if (sector->usr & LVL_SELECTED_ZPLUS) {
+						sector->flat[1].texture = clampi(sector->flat[1].texture + mouse_z, 0, 255);
+					}
+				}
+			}
 			if (ed == ED_LIGHT_LEVEL) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
 					float d = mouse_z * 0.025f;
 					if (sector->usr & LVL_SELECTED_ZMINUS) {
 						sector->light_level += d;
+						if (sector->light_level < 0) sector->light_level = 0;
+						if (sector->light_level > 1) sector->light_level = 1;
 					}
 				}
 			}
@@ -326,7 +343,7 @@ int main(int argc, char** argv)
 
 			lvl_tag_clear_highlights(&lvl);
 
-			if (ed == ED_FLAT_Z) {
+			if (ed == ED_FLAT_Z || ed == ED_FLAT_TEXTURE) {
 				lvl_tag_flats(&lvl, &trace_result, clicked);
 			}
 			if (ed == ED_LIGHT_LEVEL) {
@@ -344,6 +361,7 @@ int main(int argc, char** argv)
 				"mode: %s",
 				ed == ED_NONE ? "none" :
 				ed == ED_FLAT_Z ? "flat z" :
+				ed == ED_FLAT_TEXTURE ? "flat texture" :
 				ed == ED_LIGHT_LEVEL ? "light level" :
 				"???"
 			);
