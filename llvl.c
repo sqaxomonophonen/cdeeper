@@ -212,6 +212,20 @@ static void read_sidedefs(lua_State* L, struct lvl* lvl, const char* name)
 		}
 		lua_pop(L, 1);
 
+		lua_getfield(L, -1, "tx");
+		if (lua_isnil(L, -1)) {
+			for (int j = 0; j < 2; j++) {
+				mat23_identity(&sd->tx[j]);
+			}
+		} else {
+			for (int j = 0; j < 2; j++) {
+				lua_rawgeti(L, -1, j+1);
+				read_tx(L, &sd->tx[j]);
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 1);
+
 		lua_pop(L, 1);
 	}
 
@@ -359,6 +373,13 @@ static void write_sidedefs(lua_State* L, struct lvl* lvl)
 			lua_rawseti(L, -2, j+1);
 		}
 		lua_setfield(L, -2, "texture");
+
+		lua_newtable(L);
+		for (int j = 0; j < 2; j++) {
+			push_tx(L, &sidedef->tx[j]);
+			lua_rawseti(L, -2, j+1);
+		}
+		lua_setfield(L, -2, "tx");
 
 		lua_pop(L, 1);
 	}

@@ -711,62 +711,57 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 
 			float vd_length = vec2_length(&vd);
 
-			if (sopp == NULL) {
-				// one-sided
-				float z0 = plane_z(&sector->flat[1].plane, v0);
-				float z1 = plane_z(&sector->flat[1].plane, v1);
-				float z2 = plane_z(&sector->flat[0].plane, v1);
-				float z3 = plane_z(&sector->flat[0].plane, v0);
+			for (int zd = -1; zd <= 1; zd++) {
+				if (sopp == NULL && zd != 0) continue;
+				if (sopp != NULL && zd == 0) continue;
 
 				float u0 = 0;
 				float u1 = vd_length;
 
-				if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, 0);
-				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], u0, z0);
-				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], u1, z1);
-				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], u1, z2);
-				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], u0, z3);
+				float z0,z1,z2,z3;
+
+				if (zd == 0) {
+					z0 = plane_z(&sector->flat[1].plane, v0);
+					z1 = plane_z(&sector->flat[1].plane, v1);
+					z2 = plane_z(&sector->flat[0].plane, v1);
+					z3 = plane_z(&sector->flat[0].plane, v0);
+				} else {
+					struct lvl_sector* sector1 = lvl_get_sector(lvl, sopp->sector);
+					if (zd == -1) {
+						z0 = plane_z(&sector1->flat[0].plane, v0);
+						z1 = plane_z(&sector1->flat[0].plane, v1);
+						z2 = plane_z(&sector->flat[0].plane, v1);
+						z3 = plane_z(&sector->flat[0].plane, v0);
+						if (z1 < z2 && z0 < z3) continue; // XXX no; handle crossing
+					} else if (zd == 1) {
+						z0 = plane_z(&sector->flat[1].plane, v0);
+						z1 = plane_z(&sector->flat[1].plane, v1);
+						z2 = plane_z(&sector1->flat[1].plane, v1);
+						z3 = plane_z(&sector1->flat[1].plane, v0);
+						if (z2 > z1 && z3 > z0) continue; // XXX no; handle crossing
+					} else {
+						AZ(1);
+					}
+				}
+
+				struct vec2 uv[4] = {
+					{{u0, z0}},
+					{{u1, z1}},
+					{{u1, z2}},
+					{{u0, z3}}
+				};
+
+				struct mat23* tx = &sd->tx[zd <= 0 ? 0 : 1];
+				for (int uvi = 0; uvi < 4; uvi++) {
+					mat23_applyi(tx, &uv[uvi]);
+				}
+
+				if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, zd);
+				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], uv[0].s[0], uv[0].s[1]);
+				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], uv[1].s[0], uv[1].s[1]);
+				render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], uv[2].s[0], uv[2].s[1]);
+				render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], uv[3].s[0], uv[3].s[1]);
 				if (render->end_wall) render->end_wall(render);
-
-			} else {
-				// two-sided
-				struct lvl_sector* sector1 = lvl_get_sector(lvl, sopp->sector);
-				{
-					float z0 = plane_z(&sector1->flat[0].plane, v0);
-					float z1 = plane_z(&sector1->flat[0].plane, v1);
-					float z2 = plane_z(&sector->flat[0].plane, v1);
-					float z3 = plane_z(&sector->flat[0].plane, v0);
-
-					float u0 = 0;
-					float u1 = vd_length;
-
-					if (z1 > z2 && z0 > z3) {
-						if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, -1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], u0, z0);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], u1, z1);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], u1, z2);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], u0, z3);
-						if (render->end_wall) render->end_wall(render);
-					} // XXX else: crossing?
-				}
-				{
-					float z0 = plane_z(&sector1->flat[1].plane, v0);
-					float z1 = plane_z(&sector1->flat[1].plane, v1);
-					float z2 = plane_z(&sector->flat[1].plane, v1);
-					float z3 = plane_z(&sector->flat[1].plane, v0);
-
-					float u0 = 0;
-					float u1 = vd_length;
-
-					if (z1 < z2 && z0 < z3) {
-						if (render->begin_wall) render->begin_wall(render, lvl, sectori, ci, 1);
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], u0, z3);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], u1, z2);
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], u1, z1);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], u0, z0);
-						if (render->end_wall) render->end_wall(render);
-					} // XXX else: crossing?
-				}
 			}
 		}
 	}

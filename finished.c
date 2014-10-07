@@ -137,6 +137,7 @@ int main(int argc, char** argv)
 		ED_FLAT_TEXTURE,
 		ED_FLAT_TEXTURE_TRANSLATE,
 		ED_SIDEDEF_TEXTURE,
+		ED_SIDEDEF_TEXTURE_TRANSLATE,
 		ED_LIGHT_LEVEL
 	//} ed = ED_FLAT_Z;
 	} ed = ED_NONE;
@@ -191,6 +192,9 @@ int main(int argc, char** argv)
 						break;
 					case SDLK_5:
 						ed = ED_SIDEDEF_TEXTURE;
+						break;
+					case SDLK_6:
+						ed = ED_SIDEDEF_TEXTURE_TRANSLATE;
 						break;
 				}
 			}
@@ -329,7 +333,7 @@ int main(int argc, char** argv)
 					}
 				}
 			}
-			if (ed == ED_SIDEDEF_TEXTURE) {
+			if (ed == ED_SIDEDEF_TEXTURE || ed == ED_SIDEDEF_TEXTURE_TRANSLATE) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
 
@@ -340,11 +344,18 @@ int main(int argc, char** argv)
 						uint32_t sdi = ld->sidedef[c->usr&1];
 						ASSERT(sdi != -1);
 						struct lvl_sidedef* sd = lvl_get_sidedef(&lvl, sdi);
-						if (sd->usr & LVL_SELECTED_ZMINUS) {
-							sd->texture[0] = clampi(sd->texture[0] + (int)tool_dy, 0, names_number_of_walls()-1);
-						}
-						if (sd->usr & LVL_SELECTED_ZPLUS) {
-							sd->texture[1] = clampi(sd->texture[1] + (int)tool_dy, 0, names_number_of_walls()-1);
+						for (int zdi = 0; zdi < 2; zdi++) {
+							if (sd->usr & (zdi == 0 ? LVL_SELECTED_ZMINUS : LVL_SELECTED_ZPLUS)) {
+								if (ed == ED_SIDEDEF_TEXTURE) {
+									sd->texture[zdi] = clampi(sd->texture[zdi] + (int)tool_dy, 0, names_number_of_walls()-1);
+								}
+								if (ed == ED_SIDEDEF_TEXTURE_TRANSLATE) {
+									// XXX flip if mirrored?
+									float scale = 2.5f;
+									sd->tx[zdi].s[4] -= tool_dx * scale;
+									sd->tx[zdi].s[5] -= tool_dy * scale;
+								}
+							}
 						}
 					}
 				}
@@ -418,7 +429,7 @@ int main(int argc, char** argv)
 			if (ed == ED_FLAT_Z || ed == ED_FLAT_TEXTURE || ed == ED_FLAT_TEXTURE_TRANSLATE) {
 				lvl_tag_flats(&lvl, &trace_result, do_select);
 			}
-			if (ed == ED_SIDEDEF_TEXTURE) {
+			if (ed == ED_SIDEDEF_TEXTURE || ed == ED_SIDEDEF_TEXTURE_TRANSLATE) {
 				lvl_tag_sidedefs(&lvl, &trace_result, do_select);
 			}
 			if (ed == ED_LIGHT_LEVEL) {
@@ -439,6 +450,7 @@ int main(int argc, char** argv)
 				ed == ED_FLAT_TEXTURE ? "flat texture" :
 				ed == ED_FLAT_TEXTURE_TRANSLATE ? "flat texture translate" :
 				ed == ED_SIDEDEF_TEXTURE ? "sidedef texture" :
+				ed == ED_SIDEDEF_TEXTURE_TRANSLATE ? "sidedef texture translate" :
 				ed == ED_LIGHT_LEVEL ? "light level" :
 				"???"
 			);
