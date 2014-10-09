@@ -146,6 +146,8 @@ int main(int argc, char** argv)
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); CHKGL;
 			glUseProgram(0);
+			glActiveTexture(GL_TEXTURE0); CHKGL;
+			glDisable(GL_TEXTURE_2D); CHKGL;
 			float overhead_scale = 0.125f;
 			glMatrixMode(GL_PROJECTION);
 			glLoadIdentity();
