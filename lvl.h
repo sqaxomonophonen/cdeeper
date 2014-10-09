@@ -45,6 +45,15 @@ struct lvl_contour {
 	uint32_t usr;
 };
 
+struct lvl_entity {
+	struct vec2 p;
+	float z;
+	float yaw;
+	float pitch;
+	int32_t sector;
+	int32_t type;
+};
+
 struct lvl {
 	uint32_t n_sectors, reserved_sectors;
 	struct lvl_sector* sectors;
@@ -60,6 +69,9 @@ struct lvl {
 
 	uint32_t n_contours, reserved_contours;
 	struct lvl_contour* contours;
+
+	uint32_t n_entities, reserved_entities;
+	struct lvl_entities* entities;
 };
 
 void lvl_init(struct lvl*);
@@ -79,14 +91,6 @@ struct vec2* lvl_get_vertex(struct lvl*, int32_t i);
 
 struct lvl_contour* lvl_get_contour(struct lvl* lvl, int32_t i);
 
-
-struct lvl_entity {
-	struct vec2 p;
-	float z;
-	float yaw;
-	float pitch;
-	int32_t sector;
-};
 
 void lvl_entity_update_sector(struct lvl* lvl, struct lvl_entity* entity);
 

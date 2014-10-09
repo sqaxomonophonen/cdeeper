@@ -33,6 +33,9 @@ void lvl_init(struct lvl* lvl)
 
 	lvl->reserved_contours = more_than_I_will_ever_need;
 	lvl->contours = calloc(lvl->reserved_contours, sizeof(struct lvl_contour));
+
+	lvl->reserved_entities = more_than_I_will_ever_need;
+	lvl->entities = calloc(lvl->reserved_entities, sizeof(struct lvl_entity));
 }
 
 static void lvl_sector_init(struct lvl_sector* sector)

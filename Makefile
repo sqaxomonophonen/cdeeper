@@ -3,6 +3,7 @@ CC=clang
 CFLAGS=-Ofast -Wall -std=c99 $(shell pkg-config $(PKGS) --cflags) -Ilibtess2
 #CFLAGS=-g -O0 -Wall -std=c99 $(shell pkg-config $(PKGS) --cflags) -Ilibtess2
 LINK=$(shell pkg-config $(PKGS) --libs) -lm
+DERIVED=dgfx/palette_table.png lua/d/entities.lua
 
 all: finished game
 
@@ -16,9 +17,16 @@ dgfx/palette_table.png: palette_table_generator Makefile
 	mkdir -p dgfx
 	./palette_table_generator gfx/flat0.png | gm convert -size 256x16 -depth 8 rgb:- dgfx/palette_table.png
 
-dgfx: dgfx/palette_table.png
+entities2lua.o: entities2lua.c entities.inc.h
+	$(CC) $(CFLAGS) -c entities2lua.c
 
-res: dgfx
+entities2lua: entities2lua.o
+	$(CC) $(LINK) entities2lua.o -o entities2lua
+
+lua/d/entities.lua: entities2lua
+	mkdir -p lua/d
+	./entities2lua > lua/d/entities.lua
+
 
 names.o: names.c names.h
 	$(CC) $(CFLAGS) -c names.c
@@ -53,17 +61,17 @@ runtime.o: runtime.c runtime.c
 finished.o: finished.c
 	$(CC) $(CFLAGS) -c finished.c
 
-finished: res runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
+finished: $(DERIVED) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
 	$(CC) $(LINK) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
 
 game.o: game.c
 	$(CC) $(CFLAGS) -c game.c
 
-game: res runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o game.o
+game: $(DERIVED) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o game.o
 	$(CC) $(LINK) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o game.o libtess2/libtess2.a -o game
 
 clean:
-	rm -rf *.o finished dgfx/*
+	rm -rf *.o finished dgfx/* lua/d/*.lua
 
 backup:
 	tar cjf ../cdeeper.tar.bz2 .

@@ -1,5 +1,15 @@
 -- editor built with love 0.9.1
 
+local entities = require('d/entities')
+
+local entity_type_map = (function ()
+	local map = {}
+	for _,e in ipairs(entities) do
+		map[e.type] = e
+	end
+	return map
+end)()
+
 MAGIC = {
 	zoom_speed = 1.08,
 	mouse_radius = 48,
@@ -101,7 +111,8 @@ function new_brick()
 		vertices = {},
 		linedefs = {},
 		sidedefs = {},
-		sectors = {}
+		sectors = {},
+		entities = {}
 	}
 end
 
@@ -121,6 +132,9 @@ function load_brick(name)
 		local rest = f:read("*a")
 		local brick = load(rest)()
 		brick.vertices = fn.map(vec2, brick.vertices)
+		for k,v in pairs(new_brick()) do
+			if not brick[k] then brick[k] = v end
+		end
 		return brick
 	end
 end
@@ -137,7 +151,7 @@ function mouse_vertex(bag)
 	local ni = nil
 	for i,v in ipairs(bag.brick.vertices) do
 		local vtx = bag.tx:apply(v)
-		r = (vtx-bag.mouse):length()
+		local r = (vtx-bag.mouse):length()
 		if ni == nil or r < nr then
 			ni = i
 			nr = r
@@ -223,6 +237,24 @@ function mouse_sector(bag)
 		end
 	end
 	return nil
+end
+
+function mouse_entity(bag)
+	local nr = nil
+	local ni = nil
+	for i,e in ipairs(bag.brick.entities) do
+		local r = (e.position - bag.mousetx):length()
+		local et = entity_type_map[e.type]
+		if r < et.radius and ( ni == nil or r < nr) then
+			ni = i
+			nr = r
+		end
+	end
+	if ni then
+		return ni
+	else
+		return nil
+	end
 end
 
 selection = {
@@ -325,6 +357,16 @@ function insert_sector(brick)
 	return #brick.sectors
 end
 
+function insert_entity(brick, type, position)
+	local entity = {
+		type = type,
+		position = position,
+		yaw = 0
+	}
+	table.insert(brick.entities, entity)
+	return #brick.entities
+end
+
 function delete_sector(brick, to_delete)
 	brick.sectors[to_delete] = false
 	for i = 1,#brick.sidedefs do
@@ -368,6 +410,10 @@ function delete_vertex(brick, to_delete)
 			delete_linedef(brick, i)
 		end
 	end
+end
+
+function delete_entity(brick, to_delete)
+	brick.entities[to_delete] = false
 end
 
 function remap(brick)
@@ -417,6 +463,15 @@ function remap(brick)
 		end
 	end
 	brick.linedefs = nld
+
+	local nent = {}
+	for i = 1,#brick.entities do
+		local e = brick.entities[i]
+		if e then
+			table.insert(nent, e)
+		end
+	end
+	brick.entities = nent
 end
 
 function rect_test(p, p0, pdim)
@@ -491,9 +546,13 @@ vertex = {
 		end
 	end,
 
-	get_selected_vertices = function (self, brick)
-		return selection.selected
-	end,
+	get_selected_positions = function (self, brick)
+		local positions = {}
+		for _,i in ipairs(selection.selected) do
+			positions[i] = brick.vertices[i]
+		end
+		return positions
+	end
 },
 
 -- LINEDEF MODE
@@ -579,18 +638,19 @@ linedef = {
 		end
 	end,
 
-	get_selected_vertices = function (self, brick)
+	get_selected_positions = function (self, brick)
 		local vs = {}
 		for _,i in ipairs(selection.selected) do
 			local ld = brick.linedefs[i]
 			vs[ld.vertex[1]] = true
 			vs[ld.vertex[2]] = true
 		end
-		local vsi = {}
-		for k,_ in pairs(vs) do
-			table.insert(vsi, k)
+
+		local positions = {}
+		for i,_ in pairs(vs) do
+			positions[i] = brick.vertices[i]
 		end
-		return vsi
+		return positions
 	end,
 
 	tags = function (self)
@@ -792,23 +852,23 @@ sidedef = {
 		selection:clear()
 	end,
 
-	get_selected_vertices = function (self, brick)
+	get_selected_positions = function (self, brick)
 		local sds = {}
 		for _,i in ipairs(selection.selected) do
 			sds[i] = true
 		end
 		local vs = {}
 		for _,ld in ipairs(brick.linedefs) do
-			if sds[ld.sidedef[1]] or sds[ld.sidedef[2]] then
-				vs[ld.vertex[1]] = true
-				vs[ld.vertex[2]] = true
+			if sds[ld.sidedef[1] ] or sds[ld.sidedef[2] ] then
+				vs[ld.vertex[1] ] = true
+				vs[ld.vertex[2] ] = true
 			end
 		end
-		local vsi = {}
-		for k,_ in pairs(vs) do
-			table.insert(vsi, k)
+		local positions = {}
+		for i,_ in pairs(vs) do
+			positions[i] = brick.vertices[i]
 		end
-		return vsi
+		return positions
 	end
 },
 
@@ -870,7 +930,7 @@ sector = {
 		selection:clear()
 	end,
 
-	get_selected_vertices = function (self, brick)
+	get_selected_positions = function (self, brick)
 		local secs = {}
 		for _,i in ipairs(selection.selected) do
 			secs[i] = true
@@ -883,16 +943,149 @@ sector = {
 		end
 		local vs = {}
 		for _,ld in ipairs(brick.linedefs) do
-			if sds[ld.sidedef[1]] or sds[ld.sidedef[2]] then
-				vs[ld.vertex[1]] = true
-				vs[ld.vertex[2]] = true
+			if sds[ld.sidedef[1] ] or sds[ld.sidedef[2] ] then
+				vs[ld.vertex[1] ] = true
+				vs[ld.vertex[2] ] = true
 			end
 		end
-		local vsi = {}
-		for k,_ in pairs(vs) do
-			table.insert(vsi, k)
+		local positions = {}
+		for i,_ in pairs(vs) do
+			positions[i] = brick.vertices[i]
 		end
-		return vsi
+		return positions
+	end
+},
+
+-- ENTITY MODE
+entity = {
+	name = "entity",
+	is_primary_mode = true,
+
+	page = 1,
+	chosen_entity = nil,
+	pages = (function()
+		local pages = {}
+		local pmap = {}
+		for _,entity in ipairs(entities) do
+			if not pmap[entity.group] then
+				local page = {group = entity.group, entities = {}}
+				table.insert(pages, page)
+				pmap[entity.group] = page.entities
+			end
+			table.insert(pmap[entity.group], entity)
+		end
+		table.sort(pages, function (a,b) return a.group < b.group end)
+		return pages
+	end)(),
+
+	page_items = function (self)
+		local items = {}
+		local y = 40
+		local w = 100
+		local x0 = love.graphics.getWidth() - 100 - 10
+		for _,entity in ipairs(self.pages[self.page].entities) do
+			table.insert(items, {entity=entity,rect=rect{x0, y, w, 18}})
+			y = y + 18
+		end
+		table.sort(items, function (a,b) return a.entity.type < b.entity.type end)
+		return items
+	end,
+
+	insert = function (self, bag)
+		for _,item in ipairs(self:page_items()) do
+			if item.rect:contains(bag.mouse) then
+				self.chosen_entity = item.entity.type
+				return
+			end
+		end
+
+		if not self.chosen_entity then return end
+		local i = insert_entity(bag.brick, self.chosen_entity, snap_to_grid_or_dont(bag, bag.mousetx))
+		selection:toggle_one(i)
+	end,
+
+	render_overlay = function (self, bag)
+		local limit = 250
+		local x = love.graphics.getWidth() - limit - 10
+		local y = 10
+		love.graphics.setColor{255,0,0,255}
+		local page = self.pages[self.page]
+		love.graphics.printf(page.group .. " " .. self.page .. "/" .. #self.pages, x, y, limit, "right")
+
+		for _,item in ipairs(self:page_items()) do
+			local color
+			if self.chosen_entity == item.entity.type then
+				color = {255,255,0,255}
+			else
+				color = {100,150,100,150}
+			end
+			if item.rect:contains(bag.mouse) then color[4] = 255 end
+			love.graphics.setColor(color)
+			love.graphics.printf(item.entity.type, x, item.rect[2], limit, "right")
+		end
+
+		local i = mouse_entity(bag)
+		if i then
+			local e = bag.brick.entities[i]
+			love.graphics.setColor(255,255,255,255)
+			love.graphics.print(e.type, bag.mouse[1] + 10, bag.mouse[2])
+		end
+	end,
+
+	pg = function (self, dpage)
+		self.page = self.page + dpage
+		if self.page < 1 then
+			self.page = #self.pages
+		elseif self.page > #self.pages then
+			self.page = 1
+		end
+	end,
+
+	select = function (self, bag)
+		local i, e = mouse_entity(bag)
+		if i then selection:toggle_one(i) end
+	end,
+
+	select_all = function (self, bag)
+		local is = {}
+		for i = 1,#bag.brick.entities do
+			table.insert(is, i)
+		end
+		selection:toggle_multiple(is)
+	end,
+
+	delete = function (self, bag)
+		for _,i in ipairs(selection.selected) do
+			delete_entity(bag.brick, i)
+		end
+		remap(bag.brick)
+		selection:clear()
+	end,
+
+	block_select = function (self, bag, p0, pdim)
+		for i,e in ipairs(bag.brick.entities) do
+			local vtx = bag.tx:apply(e.position)
+			if rect_test(vtx, p0, pdim) then
+				selection:toggle_one(i)
+			end
+		end
+	end,
+
+	get_selected_positions = function (self, brick)
+		local positions = {}
+		for _,i in ipairs(selection.selected) do
+			positions[i] = brick.entities[i].position
+		end
+		return positions
+	end,
+
+	post_tx = function (self, bag, tx_info, positions)
+		if not tx_info.rotation then return end
+		local deg = tx_info.rotation / math.pi * 180
+		for i,_ in pairs(positions) do
+			local e = bag.brick.entities[i]
+			e.yaw = e.yaw - deg
+		end
 	end
 }
 
@@ -950,6 +1143,22 @@ function render_brick(bag)
 		end
 		love.graphics.circle('fill', vtx[1], vtx[2], 3, 6)
 	end
+
+	for i,e in ipairs(bag.brick.entities) do
+		local et = entity_type_map[e.type]
+		local vtx = bag.tx:apply(e.position)
+		if (bag.mode == modes.entity or bag.mode.previous_mode == modes.entity) and selection:has(i) then
+			love.graphics.setColor(MAGIC.selection_color)
+		else
+			love.graphics.setColor{100,120,120,200}
+		end
+		love.graphics.circle('line', vtx[1], vtx[2], et.radius)
+		local deg2rad = function (deg)
+			return deg / 180 * math.pi
+		end
+		love.graphics.line(vtx[1], vtx[2], vtx[1] - math.sin(deg2rad(e.yaw)) * et.radius, vtx[2] + math.cos(deg2rad(e.yaw)) * et.radius)
+
+	end
 end
 
 function block_mode(bag)
@@ -999,12 +1208,12 @@ function tx_mode(bag, impl)
 		return bag.mode
 	end
 
-	local vis = bag.mode:get_selected_vertices(bag.brick)
+	local positions = bag.mode:get_selected_positions(bag.brick)
 
 	local center = vec2{0,0}
 	local n = 0
-	for _,i in ipairs(vis) do
-		center = center + bag.brick.vertices[i]
+	for _,p in pairs(positions) do
+		center = center + p
 		n = n + 1
 	end
 	center = center:scale(1/n)
@@ -1030,26 +1239,19 @@ function tx_mode(bag, impl)
 			end
 			love.graphics.setColor(30,100,230,255)
 			local vz = {}
-			for _,i in ipairs(vis) do
-				local v = bag.brick.vertices[i]
-				local vtx = bag.tx:apply(impl:transform(self, bag, v))
-				vz[i] = vtx
-				love.graphics.circle('fill', vtx[1], vtx[2], 4, 6)
-			end
-			love.graphics.setLineWidth(1)
-			love.graphics.setColor(15,30,100,255)
-			for _,ld in ipairs(bag.brick.linedefs) do
-				local p0 = vz[ld.vertex[1]]
-				local p1 = vz[ld.vertex[2]]
-				if p0 and p1 then
-					love.graphics.line(p0[1], p0[2], p1[1], p1[2])
-				end
+			for _,p in pairs(positions) do
+				local ptx = bag.tx:apply(impl:transform(self, bag, p))
+				love.graphics.circle('fill', ptx[1], ptx[2], 7, 6)
 			end
 		end,
 		insert = function (self, bag)
 			self:_set_p1(bag)
-			for _,i in ipairs(vis) do
-				bag.brick.vertices[i] = impl:transform(self, bag, bag.brick.vertices[i])
+			for _,p0 in pairs(positions) do
+				local p1 = impl:transform(self, bag, p0)
+				for i=1,2 do p0[i] = p1[i] end
+			end
+			if self.previous_mode.post_tx and impl.tx_info then
+				self.previous_mode:post_tx(bag, impl:tx_info(self, bag), positions)
 			end
 			bag.mode = self.previous_mode
 		end
@@ -1096,21 +1298,25 @@ end
 function rotate_mode(bag)
 	return tx_mode(bag, {
 		name = "rotate",
-		transform = function (self, txmode, bag, v)
+		_phi = function (txmode, bag)
 			local d1 = txmode.center - txmode.p0
 			local d = txmode.center - txmode.p1
 			phi = math.atan2(d[1],d[2]) - math.atan2(d1[1],d1[2])
-
 			if bag.snap_to_grid then
 				phi = raw_snap(phi, math.pi / 20)
 			end
-
+			return phi
+		end,
+		transform = function (self, txmode, bag, v)
 			local op = mat33.identity()
 			op = op * mat33.translate(txmode.center)
-			op = op * mat33.rotate(phi)
+			op = op * mat33.rotate(self._phi(txmode, bag))
 			op = op * mat33.translate(-txmode.center)
 
 			return op:apply(v)
+		end,
+		tx_info = function (self, txmode, bag)
+			return {rotation = self._phi(txmode, bag)}
 		end,
 		render_gui = function (self, txmode, bag)
 			local p0 = bag.tx:apply(txmode.center)
@@ -1195,7 +1401,8 @@ function love.run()
 					["1"] = "vertex",
 					["2"] = "linedef",
 					["3"] = "sidedef",
-					["4"] = "sector"
+					["4"] = "sector",
+					["5"] = "entity"
 				}
 				if t == "keypressed" and mode_keys[a] and bag.mode ~= modes[mode_keys[a]] then
 					selection:clear() -- XXX would be very nice to have selection migration, no?
@@ -1278,11 +1485,17 @@ function love.run()
 					end
 				end
 
-				if t == "keypressed" and a == "z" and not selection:empty() and bag.mode.get_selected_vertices then
-					local svs = bag.mode:get_selected_vertices(bag.brick)
-					for _,i in ipairs(svs) do
-						bag.brick.vertices[i] = snap_to_grid(bag, bag.brick.vertices[i])
+				if t == "keypressed" and a == "z" and not selection:empty() and bag.mode.get_selected_positions then
+					local positions = bag.mode:get_selected_positions(bag.brick)
+					for _,p0 in pairs(positions) do
+						local p1 = snap_to_grid(bag, p0)
+						for i=1,2 do p0[i] = p1[i] end
 					end
+				end
+
+				if t == "keypressed" and bag.mode.pg and (a == "pagedown" or a == "pageup") then
+					local m = {pagedown = 1, pageup = -1}
+					bag.mode:pg(m[a])
 				end
 			end
 		end
