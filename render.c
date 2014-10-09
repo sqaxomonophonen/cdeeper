@@ -2,6 +2,7 @@
 #include "magic.h"
 #include "render.h"
 #include "mud.h"
+#include "runtime.h"
 #include "a.h"
 
 #include <tesselator.h>
@@ -452,6 +453,8 @@ static void render_init_tagstuff(struct render* render)
 
 void render_init(struct render* render, SDL_Window* window)
 {
+	glew_init();
+
 	render->window = window;
 
 	render_init_palette_table(render);
@@ -1046,6 +1049,7 @@ void render_lvl_geom(struct render* render, struct lvl* lvl)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); CHKGL;
 	glEnable(GL_DEPTH_TEST);
 
 	render_flats(render, lvl);

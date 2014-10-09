@@ -7,39 +7,8 @@
 #include "render.h"
 #include "font.h"
 #include "names.h"
+#include "runtime.h"
 
-static void glew_init()
-{
-	GLenum err = glewInit();
-	if (err != GLEW_OK) {
-		arghf("glewInit() failed: %s", glewGetErrorString(err));
-	}
-
-	#define CHECK_GL_EXT(x) { if(!GLEW_ ## x) arghf("OpenGL extension not found: " #x); }
-	CHECK_GL_EXT(ARB_shader_objects)
-	CHECK_GL_EXT(ARB_vertex_shader)
-	CHECK_GL_EXT(ARB_fragment_shader)
-	CHECK_GL_EXT(ARB_framebuffer_object)
-	CHECK_GL_EXT(ARB_vertex_buffer_object)
-	#undef CHECK_GL_EXT
-
-	/* to figure out what extension something belongs to, see:
-	 * http://www.opengl.org/registry/#specfiles */
-
-	// XXX check that version is at least 1.30?
-	// printf("GLSL version %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
-}
-
-/*
-static float frand(float min, float max)
-{
-	float s = (float)rand() / (float)RAND_MAX;
-	return min + s * (max - min);
-}
-*/
-
-
-#include "magic.h"
 int main(int argc, char** argv)
 {
 	if (argc != 2) {
@@ -57,7 +26,7 @@ int main(int argc, char** argv)
 	int bitmask = SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_OPENGL;
 
 	SDL_Window* window = SDL_CreateWindow(
-		"deeper",
+		"finished",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		0, 0,
 		bitmask);
@@ -90,12 +59,6 @@ int main(int argc, char** argv)
 
 	struct render render;
 	render_init(&render, window);
-
-	glEnable(GL_DEPTH_TEST); CHKGL;
-	glEnable(GL_CULL_FACE); CHKGL;
-	glEnable(GL_BLEND); CHKGL;
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); CHKGL;
-	glDepthFunc(GL_LEQUAL);
 
 	struct lvl lvl;
 	lvl_init(&lvl);

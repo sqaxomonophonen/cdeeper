@@ -5,5 +5,6 @@
 
 void llvl_load(const char* name, struct lvl* lvl);
 void llvl_save(const char* name, struct lvl* lvl);
+void llvl_build(const char* plan, struct lvl* lvl);
 
 #endif//LLVL_H

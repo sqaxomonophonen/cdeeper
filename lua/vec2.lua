@@ -40,6 +40,10 @@ mt.__unm = function (self)
 	return static.new{-self[1], -self[2]}
 end
 
+mt.dump = function (self)
+	print(unpack(self))
+end
+
 static.new = function (a)
 	return setmetatable(a, mt)
 end

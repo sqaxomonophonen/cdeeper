@@ -4,7 +4,7 @@ CFLAGS=-Ofast -Wall -std=c99 $(shell pkg-config $(PKGS) --cflags) -Ilibtess2
 #CFLAGS=-g -O0 -Wall -std=c99 $(shell pkg-config $(PKGS) --cflags) -Ilibtess2
 LINK=$(shell pkg-config $(PKGS) --libs) -lm
 
-all: finished
+all: finished game
 
 palette_table_generator.o: palette_table_generator.c mud.h
 	$(CC) $(CFLAGS) -c palette_table_generator.c
@@ -47,11 +47,20 @@ lvl.o: lvl.c lvl.h
 llvl.o: llvl.c llvl.h lvl.h
 	$(CC) $(CFLAGS) -c llvl.c
 
+runtime.o: runtime.c runtime.c
+	$(CC) $(CFLAGS) -c runtime.c
+
 finished.o: finished.c
 	$(CC) $(CFLAGS) -c finished.c
 
-finished: res names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
-	$(CC) $(LINK) names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
+finished: res runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o
+	$(CC) $(LINK) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o finished.o libtess2/libtess2.a -o finished
+
+game.o: game.c
+	$(CC) $(CFLAGS) -c game.c
+
+game: res runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o game.o
+	$(CC) $(LINK) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o game.o libtess2/libtess2.a -o game
 
 clean:
 	rm -rf *.o finished dgfx/*

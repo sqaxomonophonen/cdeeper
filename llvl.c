@@ -47,7 +47,7 @@ static void pcall(lua_State* L, int nargs, int nresults)
 	}
 }
 
-static void loadlua(lua_State* L, const char* name)
+static void load_lua_brick(lua_State* L, const char* name)
 {
 	lua_getglobal(L, "dofile");
 	brickname_to_path(L, name);
@@ -273,6 +273,14 @@ static void read_linedefs(lua_State* L, struct lvl* lvl, const char* name)
 	lua_pop(L, 1);
 }
 
+static void read_lvl(lua_State* L, struct lvl* lvl, const char* name)
+{
+	read_vertices(L, lvl, name);
+	read_sectors(L, lvl, name);
+	read_sidedefs(L, lvl, name);
+	read_linedefs(L, lvl, name);
+}
+
 void llvl_load(const char* name, struct lvl* lvl)
 {
 	lua_State* L = luaL_newstate();
@@ -280,22 +288,40 @@ void llvl_load(const char* name, struct lvl* lvl)
 	luaL_openlibs(L);
 	setup_package_path(L);
 
-	loadlua(L, name);
+	load_lua_brick(L, name);
 
-	read_vertices(L, lvl, name);
-	read_sectors(L, lvl, name);
-	read_sidedefs(L, lvl, name);
-	read_linedefs(L, lvl, name);
+	read_lvl(L, lvl, name);
 
-	/*
+	#if 0
 	printf("n vertices: %d\n", lvl->n_vertices);
 	printf("n linedefs: %d\n", lvl->n_linedefs);
 	printf("n sidedefs: %d\n", lvl->n_sidedefs);
 	printf("n sectors: %d\n", lvl->n_sectors);
-	*/
+	#endif
 
 	lvl_build_contours(lvl);
 
+	lua_close(L);
+}
+
+void llvl_build(const char* plan, struct lvl* lvl)
+{
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+	setup_package_path(L);
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "build");
+	pcall(L, 1, 1);
+	if (!lua_isfunction(L, -1)) arghf("expected require('build') to yield a function");
+
+	lua_pushstring(L, plan);
+	pcall(L, 1, 1);
+	if (!lua_istable(L, -1)) arghf("expected require('build')(\"%s\") to yield a table", plan);
+
+	read_lvl(L, lvl, plan);
+
+	lvl_build_contours(lvl);
 	lua_close(L);
 }
 
@@ -397,7 +423,7 @@ void llvl_save(const char* name, struct lvl* lvl)
 	pushpromptfn(L);
 	pushlsonfn(L);
 
-	loadlua(L, name);
+	load_lua_brick(L, name);
 
 	write_sectors(L, lvl);
 	write_sidedefs(L, lvl);

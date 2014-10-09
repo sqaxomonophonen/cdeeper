@@ -8,10 +8,12 @@
 
 void lvl_init(struct lvl* lvl)
 {
+	#if 0
 	printf("sizeof(struct lvl_sector) = %zd\n", sizeof(struct lvl_sector));
 	printf("sizeof(struct lvl_linedef) = %zd\n", sizeof(struct lvl_linedef));
 	printf("sizeof(struct lvl_sidedef) = %zd\n", sizeof(struct lvl_sidedef));
 	printf("sizeof(struct vec2) = %zd\n", sizeof(struct vec2));
+	#endif
 
 	memset(lvl, 0, sizeof(struct lvl));
 

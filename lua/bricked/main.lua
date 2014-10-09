@@ -11,6 +11,7 @@ MAGIC = {
 local lson = require('lson')
 local mat33 = require('mat33')
 local vec2 = require('vec2')
+local rect = require('rect')
 local fn = require('fn')
 
 function render_grid(bag)
@@ -515,6 +516,7 @@ linedef = {
 	end,
 
 	insert = function (self, bag)
+		if self:handle_tag_click(bag) then return end
 		local v = self:_mouse_vertex(bag)
 		if not v then
 			v = insert_vertex(bag.brick, snap_to_grid_or_dont(bag, bag.mousetx))
@@ -589,7 +591,104 @@ linedef = {
 			table.insert(vsi, k)
 		end
 		return vsi
+	end,
+
+	tags = function (self)
+		return {
+			'portal_0',
+			'portal_1'
+		}
+	end,
+
+	tag_rect = function (self, i)
+		return rect{10, 60 + i * 18, 100, 18}
+	end,
+
+	handle_tag_click = function (self, bag)
+		local i = 0
+		for _,tag in ipairs(self:tags()) do
+			local r = self:tag_rect(i)
+			if r:contains(bag.mouse) then
+				local found = false
+				for _,i in ipairs(selection.selected) do
+					local ld = bag.brick.linedefs[i]
+					for _,t in ipairs(ld.tags or {}) do
+						if t == tag then
+							found = true
+						end
+					end
+				end
+				if found then
+					-- remove
+					for _,i in ipairs(selection.selected) do
+						local ld = bag.brick.linedefs[i]
+						local new_tags = {}
+						for _,t in ipairs(ld.tags or {}) do
+							if t ~= tag then
+								table.insert(new_tags, t)
+							end
+						end
+						ld.tags = new_tags
+					end
+				else
+					-- add
+					for _,i in ipairs(selection.selected) do
+						local ld = bag.brick.linedefs[i]
+						if not ld.tags then ld.tags = {} end
+						local already_there = false
+						for _,t in ipairs(ld.tags) do
+							if t == tag then
+								already_there = true
+							end
+						end
+						if not already_there then
+							table.insert(ld.tags, tag)
+						end
+					end
+				end
+				return true
+			end
+			i = i + 1
+		end
+		return false
+	end,
+
+	render_overlay = function (self, bag)
+		local i = 0
+		for _,tag in ipairs(self:tags()) do
+			local count = 0
+			for _,i in ipairs(selection.selected) do
+				local ld = bag.brick.linedefs[i]
+				for _,t in ipairs(ld.tags or {}) do
+					if t == tag then
+						count = count + 1
+					end
+				end
+			end
+			local color
+			local pre
+			if count == 0 then
+				color = {155,155,155,200}
+				pre = "-"
+			elseif count == #selection.selected then
+				color = {255,0,255,200}
+				pre = "+"
+			else
+				color = {0,128,128,200}
+				pre = "="
+			end
+
+			local r = self:tag_rect(i)
+			if r:contains(bag.mouse) and #selection.selected > 0 then
+				color[4] = 255
+			end
+			love.graphics.setColor(color)
+
+			love.graphics.print(pre .. " " .. tag, r[1] + 10, r[2])
+			i = i + 1
+		end
 	end
+
 },
 
 -- SIDEDEF MODE
@@ -804,6 +903,8 @@ function render_brick(bag)
 	for i,ld in ipairs(bag.brick.linedefs) do
 		if (bag.mode == modes.linedef or bag.mode.previous_mode == modes.linedef) and selection:has(i) then
 			love.graphics.setColor(MAGIC.selection_color)
+		elseif ld.tags and #ld.tags > 0 then
+			love.graphics.setColor{255,0,255,255}
 		else
 			love.graphics.setColor{70,70,70,255}
 		end
@@ -1199,15 +1300,23 @@ function love.run()
 
 		love.graphics.setBlendMode('alpha')
 
+		local y = 10
+
 		love.graphics.setColor(255,255,0,255)
-		love.graphics.print(bag.mode.name .. " mode", 10, 10)
+		love.graphics.print(bag.mode.name .. " mode", 10, y)
+		y = y + 20
 
 		if show_grid then
 			love.graphics.setColor(255,200,0,255)
 		else
 			love.graphics.setColor(155,100,0,255)
 		end
-		love.graphics.print("grid size: " .. bag.grid_size .. (bag.snap_to_grid and " (snap)" or ""), 10, 30)
+		love.graphics.print("grid size: " .. bag.grid_size .. (bag.snap_to_grid and " (snap)" or ""), 10, y)
+		y = y + 20
+
+		if bag.mode.render_overlay then
+			bag.mode:render_overlay(bag)
+		end
 
 		local shade_height = 30
 

@@ -115,6 +115,11 @@ mt.__mul = function (self, other)
 	return static.new(product)
 end
 
+mt.dump = function (self)
+	for i = 1,3 do
+		print(unpack(self:row(i)))
+	end
+end
 
 static.new = function (a)
 	return setmetatable(a, mt)
@@ -136,6 +141,21 @@ end
 
 static.scale = function (s)
 	return static.new{s,0,0, 0,s,0, 0,0,1}
+end
+
+static.basis = function (v)
+	local n = v:normal()
+	return static.new{v[1],n[1],0, v[2],n[2],0, 0,0,1}
+end
+
+-- matrix that maps a to b
+static.map22 = function (a, b)
+	return  static.basis(b) * static.basis(a):inverse()
+end
+
+-- matrix that maps au->av to bu->bv
+static.map33 = function (au, av, bu, bv)
+	return static.translate(bu) * static.map22(av-au, bv-bu) * static.translate(-au)
 end
 
 return setmetatable(static, {__call = function(_, ...) return static.new(...) end })
