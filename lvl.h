@@ -45,13 +45,15 @@ struct lvl_contour {
 	uint32_t usr;
 };
 
+#define ENTITY_DELETED (-1)
+
 struct lvl_entity {
-	struct vec2 p;
+	int32_t type;
+	struct vec2 position;
 	float z;
 	float yaw;
 	float pitch;
 	int32_t sector;
-	int32_t type;
 };
 
 struct lvl {
@@ -71,10 +73,13 @@ struct lvl {
 	struct lvl_contour* contours;
 
 	uint32_t n_entities, reserved_entities;
-	struct lvl_entities* entities;
+	struct lvl_entity* entities;
 };
 
 void lvl_init(struct lvl*);
+
+uint32_t lvl_new_entity(struct lvl*);
+struct lvl_entity* lvl_get_entity(struct lvl*, int32_t i);
 
 uint32_t lvl_new_sector(struct lvl*);
 struct lvl_sector* lvl_get_sector(struct lvl*, int32_t i);

@@ -171,7 +171,7 @@ int main(int argc, char** argv)
 			glEnd();
 
 			glRotatef(-player.yaw, 0, 0, 1);
-			glTranslatef(-player.p.s[0],-player.p.s[1],0);
+			glTranslatef(-player.position.s[0],-player.position.s[1],0);
 
 			glBegin(GL_LINES);
 			for (int i = 0; i < lvl.n_linedefs; i++) {
@@ -189,7 +189,7 @@ int main(int argc, char** argv)
 			glEnd();
 		} else {
 			render_set_entity_cam(&render, &player);
-			render_lvl_geom(&render, &lvl);
+			render_lvl(&render, &lvl);
 
 			render_begin2d(&render);
 			font_begin(&font, 6);

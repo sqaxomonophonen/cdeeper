@@ -38,6 +38,27 @@ void lvl_init(struct lvl* lvl)
 	lvl->entities = calloc(lvl->reserved_entities, sizeof(struct lvl_entity));
 }
 
+static void lvl_entity_init(struct lvl_entity* e)
+{
+	memset(e, 0, sizeof(struct lvl_entity));
+}
+
+
+uint32_t lvl_new_entity(struct lvl* lvl)
+{
+	ASSERT(lvl->n_entities < lvl->reserved_entities);
+	uint32_t newi = lvl->n_entities++;
+	lvl_entity_init(lvl_get_entity(lvl, newi));
+	return newi;
+}
+
+
+struct lvl_entity* lvl_get_entity(struct lvl* lvl, int32_t i)
+{
+	ASSERT(i >= 0 && i < lvl->n_entities);
+	return &lvl->entities[i];
+}
+
 static void lvl_sector_init(struct lvl_sector* sector)
 {
 	sector->contour0 = -1;
@@ -324,7 +345,7 @@ void lvl_entity_update_sector(struct lvl* lvl, struct lvl_entity* entity)
 {
 	// XXX use previous sector value as a good guess, and check neighbours
 	for (int i = 0; i < lvl->n_sectors; i++) {
-		if (lvl_sector_inside(lvl, i, &entity->p)) {
+		if (lvl_sector_inside(lvl, i, &entity->position)) {
 			entity->sector = i;
 			return;
 		}
@@ -340,7 +361,7 @@ float lvl_entity_radius(struct lvl_entity* entity)
 static void lvl_entity_vec3_position(struct lvl_entity* entity, struct vec3* position)
 {
 	for (int i = 0; i < 2; i++) {
-		position->s[i] = entity->p.s[i];
+		position->s[i] = entity->position.s[i];
 	}
 	position->s[2] = entity->z;
 }
@@ -393,7 +414,7 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 	vec2_normalize(&vn);
 
 	struct vec2 dw;
-	vec2_sub(&dw, &entity->p, v0);
+	vec2_sub(&dw, &entity->position, v0);
 
 	float d = vec2_dot(&dw, &vn);
 	float dabs = fabs(d);
@@ -419,7 +440,7 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 			intersects = 1;
 		} else {
 			struct vec2* vcorner = u<0 ? v0 : v1;
-			vec2_sub(&escape, &entity->p, vcorner);
+			vec2_sub(&escape, &entity->position, vcorner);
 			float ed = vec2_length(&escape);
 			if (ed <= radius) {
 				float push = radius - ed + epsilon;
@@ -440,7 +461,7 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 		}
 
 		if (impassable) {
-			vec2_addi(&entity->p, &escape);
+			vec2_addi(&entity->position, &escape);
 		}
 	}
 }
@@ -477,7 +498,7 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2
 	for (int i = 0; i < nsteps; i++) {
 		struct vec2 move_fragment;
 		vec2_scale(&move_fragment, move, fragment);
-		vec2_addi(&entity->p, &move_fragment);
+		vec2_addi(&entity->position, &move_fragment);
 		entclip(lvl, entity);
 	}
 
@@ -487,7 +508,7 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2
 		struct lvl_sector* sector = lvl_get_sector(lvl, entity->sector);
 		struct plane* plane = &sector->flat[0].plane;
 		float height = 48;
-		entity->z = plane_z(plane, &entity->p) + height;
+		entity->z = plane_z(plane, &entity->position) + height;
 	}
 }
 

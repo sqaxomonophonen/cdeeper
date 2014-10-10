@@ -74,6 +74,17 @@ static void pushlsonfn(lua_State* L)
 	if (!lua_isfunction(L, -1)) arghf("expected LSON module to return a function");
 }
 
+static void read_vec2(lua_State* L, struct vec2* v)
+{
+	lua_rawgeti(L, -1, 1);
+	v->s[0] = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	lua_rawgeti(L, -1, 2);
+	v->s[1] = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+}
+
 static void read_vertices(lua_State* L, struct lvl* lvl, const char* name)
 {
 	lua_getfield(L, -1, "vertices");
@@ -83,18 +94,7 @@ static void read_vertices(lua_State* L, struct lvl* lvl, const char* name)
 	for (int i = 1; i <= N; i++) {
 		lua_rawgeti(L, -1, i);
 		if (!lua_istable(L, -1)) arghf("expected r[\"vertices\"][%d] to be a table in '%s'", i, name);
-
-		uint32_t vi = lvl_new_vertex(lvl);
-		struct vec2* v = lvl_get_vertex(lvl, vi);
-
-		lua_rawgeti(L, -1, 1);
-		v->s[0] = lua_tointeger(L, -1);
-		lua_pop(L, 1);
-
-		lua_rawgeti(L, -1, 2);
-		v->s[1] = lua_tointeger(L, -1);
-		lua_pop(L, 1);
-
+		read_vec2(L, lvl_get_vertex(lvl, lvl_new_vertex(lvl)));
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
@@ -273,12 +273,42 @@ static void read_linedefs(lua_State* L, struct lvl* lvl, const char* name)
 	lua_pop(L, 1);
 }
 
+static void read_entities(lua_State* L, struct lvl* lvl, const char* name)
+{
+	lua_getfield(L, -1, "entities");
+	if (!lua_istable(L, -1)) arghf("expected r[\"entities\"] to be a table in '%s'", name);
+
+	int N = lua_objlen(L, -1);
+	for (int i = 1; i <= N; i++) {
+		lua_rawgeti(L, -1, i);
+		if (!lua_istable(L, -1)) arghf("expected r[\"entities\"][%d] to be a table in '%s'", i, name);
+
+		struct lvl_entity* e = lvl_get_entity(lvl, lvl_new_entity(lvl));
+
+		lua_getfield(L, -1, "type");
+		e->type = names_find_entity_type(lua_tostring(L, -1));
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "position");
+		read_vec2(L, &e->position);
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "yaw");
+		e->yaw = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+}
+
 static void read_lvl(lua_State* L, struct lvl* lvl, const char* name)
 {
 	read_vertices(L, lvl, name);
 	read_sectors(L, lvl, name);
 	read_sidedefs(L, lvl, name);
 	read_linedefs(L, lvl, name);
+	read_entities(L, lvl, name);
 }
 
 void llvl_load(const char* name, struct lvl* lvl)

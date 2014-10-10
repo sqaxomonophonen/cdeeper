@@ -7,8 +7,9 @@
 #include "lvl.h"
 
 #define MAX_WALLS (1024)
+#define MAX_SPRITES (4096)
 
-struct render_wall {
+struct render_texture {
 	GLuint texture;
 	int width;
 	int height;
@@ -36,7 +37,8 @@ struct render {
 	int flat_index_n;
 	float current_select_u, current_select_v, current_light_level;
 
-	struct render_wall walls[1024];
+	struct render_texture walls[MAX_WALLS];
+	struct render_texture sprites[MAX_SPRITES];
 
 	GLuint wall_vertex_buffer;
 	GLuint wall_index_buffer;
@@ -106,7 +108,7 @@ struct render {
 void render_init(struct render* render, SDL_Window* window);
 float render_get_fovy(struct render* render);
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity);
-void render_lvl_geom(struct render* render, struct lvl* lvl);
+void render_lvl(struct render* render, struct lvl* lvl);
 void render_begin2d(struct render* render);
 void render_flip(struct render* render);
 void render_lvl_tags(struct render* render, struct lvl* lvl);

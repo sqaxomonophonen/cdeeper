@@ -106,9 +106,7 @@ static const char* wall_shader_fragment_src =
 	"\n"
 	"void main(void)\n"
 	"{\n"
-	"	vec2 nuv = vec2(v_uv.x/256, v_uv.y/128);\n" // XXX texture dimension assumption.. probably move it to the "client"
-	"	float index = texture2D(u_texture, nuv).r;\n"
-	//"	gl_FragColor = vec4(index, 0, 0, 1);\n" // TODO green is light value
+	"	float index = texture2D(u_texture, v_uv).r;\n"
 	"	gl_FragColor = vec4(index, light_falloff_fn(v_light_level, v_z), 0, 1);\n"
 	"}\n";
 
@@ -232,15 +230,13 @@ static void render_init_flats(struct render* render)
 	free(atlas);
 }
 
-static void render_init_walls(struct render* render)
+static void render_load_texture_list(struct render_texture* textures, int max, const char* names[])
 {
 	static char path[1024];
-
 	int index = 0;
-
-	for (const char** name = names_walls; *name; name++) {
-		ASSERT(index <= MAX_WALLS);
-		struct render_wall* wall = &render->walls[index];
+	for (const char** name = names; *name; name++) {
+		ASSERT(index <= max);
+		struct render_texture* texture = &textures[index];
 
 		uint8_t* data;
 
@@ -248,14 +244,14 @@ static void render_init_walls(struct render* render)
 		strcat(path, *name);
 		strcat(path, ".png");
 
-		AZ(mud_load_png_paletted(path, &data, &wall->width, &wall->height));
+		AZ(mud_load_png_paletted(path, &data, &texture->width, &texture->height));
 
 		int level = 0;
 		int border = 0;
 
-		glGenTextures(1, &wall->texture); CHKGL;
-		glBindTexture(GL_TEXTURE_2D, wall->texture); CHKGL;
-		glTexImage2D(GL_TEXTURE_2D, level, 1, wall->width, wall->height, border, GL_RED, GL_UNSIGNED_BYTE, data); CHKGL;
+		glGenTextures(1, &texture->texture); CHKGL;
+		glBindTexture(GL_TEXTURE_2D, texture->texture); CHKGL;
+		glTexImage2D(GL_TEXTURE_2D, level, 1, texture->width, texture->height, border, GL_RED, GL_UNSIGNED_BYTE, data); CHKGL;
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); CHKGL;
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); CHKGL;
 
@@ -263,7 +259,16 @@ static void render_init_walls(struct render* render)
 
 		index++;
 	}
+}
 
+static void render_init_walls(struct render* render)
+{
+	render_load_texture_list(render->walls, MAX_WALLS, names_walls);
+}
+
+static void render_init_sprites(struct render* render)
+{
+	render_load_texture_list(render->sprites, MAX_SPRITES, names_sprites);
 }
 
 static void render_init_framebuffers(struct render* render)
@@ -460,11 +465,11 @@ void render_init(struct render* render, SDL_Window* window)
 	render_init_palette_table(render);
 	render_init_flats(render);
 	render_init_walls(render);
+	render_init_sprites(render);
 	render_init_framebuffers(render);
 	render_init_shaders(render);
 	render_init_buffers(render);
 	render_init_tagstuff(render);
-
 }
 
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity)
@@ -683,8 +688,9 @@ static void renderctx_add_wall_vertex(struct render* render, float x, float y, f
 	data[i++] = x;
 	data[i++] = y;
 	data[i++] = z;
-	data[i++] = u;
-	data[i++] = v;
+	struct render_texture* texture = &render->walls[render->wall_current_texture];
+	data[i++] = u / (float)texture->width;
+	data[i++] = v / (float)texture->height;
 	data[i++] = render->current_light_level;
 	render->wall_vertex_n++;
 }
@@ -1019,7 +1025,7 @@ static void gl_transform(struct render* render)
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	glRotatef(render->entity_cam->yaw, 0, 1, 0);
-	glTranslatef(-render->entity_cam->p.s[0], -render->entity_cam->z, -render->entity_cam->p.s[1]);
+	glTranslatef(-render->entity_cam->position.s[0], -render->entity_cam->z, -render->entity_cam->position.s[1]);
 
 }
 
@@ -1039,7 +1045,23 @@ void render_begin2d(struct render* render)
 	glLoadIdentity();
 }
 
-void render_lvl_geom(struct render* render, struct lvl* lvl)
+static void render_lvl_geom(struct render* render, struct lvl* lvl)
+{
+	render_flats(render, lvl);
+	render_walls(render, lvl);
+}
+
+static void render_lvl_entities(struct render* render, struct lvl* lvl)
+{
+	for (int i = 0; i < lvl->n_entities; i++) {
+		struct lvl_entity* e = lvl_get_entity(lvl, i);
+		if (e->type == ENTITY_DELETED) continue;
+
+		//printf("TODO render entity %d (%d)\n", i, e->type);
+	}
+}
+
+void render_lvl(struct render* render, struct lvl* lvl)
 {
 	gl_transform(render);
 
@@ -1052,8 +1074,8 @@ void render_lvl_geom(struct render* render, struct lvl* lvl)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); CHKGL;
 	glEnable(GL_DEPTH_TEST);
 
-	render_flats(render, lvl);
-	render_walls(render, lvl);
+	render_lvl_geom(render, lvl);
+	render_lvl_entities(render, lvl);
 }
 
 void render_flip(struct render* render)

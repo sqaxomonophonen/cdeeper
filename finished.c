@@ -400,7 +400,7 @@ int main(int argc, char** argv)
 			}
 
 			render_set_entity_cam(&render, &player);
-			render_lvl_geom(&render, &lvl);
+			render_lvl(&render, &lvl);
 
 			render_begin2d(&render);
 			font_begin(&font, 6);

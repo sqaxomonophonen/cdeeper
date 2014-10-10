@@ -80,12 +80,14 @@ return function (plan_id)
 		linedefs = {},
 		sidedefs = {},
 		sectors = {},
+		entities = {},
 
 		add_initial_brick = function (self, brick)
 			self.vertices = brick.vertices
 			self.linedefs = brick.linedefs
 			self.sidedefs = brick.sidedefs
 			self.sectors = brick.sectors
+			self.entities = brick.entities
 		end,
 
 		add_brick = function (self, brick)
@@ -157,6 +159,9 @@ return function (plan_id)
 				end
 				for _,sector in ipairs(brick.sectors) do
 					table.insert(self.sectors, sector)
+				end
+				for _,entity in ipairs(brick.entities) do
+					table.insert(self.entities, entity)
 				end
 				-- (NOTE first sidedef is left, second is right)
 			end
