@@ -846,6 +846,15 @@ static void render_walls(struct render* render, struct lvl* lvl)
 
 	render->wall_next_texture = -1;
 
+	shader_use(&render->wall_shader);
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glEnable(GL_TEXTURE_2D); CHKGL;
+
+	glEnableVertexAttribArray(render->wall_a_pos); CHKGL;
+	glEnableVertexAttribArray(render->wall_a_uv); CHKGL;
+	glEnableVertexAttribArray(render->wall_a_light_level); CHKGL;
+
 	do {
 		render->wall_vertex_n = 0;
 		render->wall_current_texture = render->wall_next_texture;
@@ -854,34 +863,27 @@ static void render_walls(struct render* render, struct lvl* lvl)
 
 		if (render->wall_current_texture == -1) continue;
 
-		shader_use(&render->wall_shader);
-
-		glActiveTexture(GL_TEXTURE0); CHKGL;
-		glEnable(GL_TEXTURE_2D); CHKGL;
 		glBindTexture(GL_TEXTURE_2D, render->walls[render->wall_current_texture].texture); CHKGL;
 
 		glBindBuffer(GL_ARRAY_BUFFER, render->wall_vertex_buffer); CHKGL;
 		glBufferSubData(GL_ARRAY_BUFFER, 0, render->wall_vertex_n * sizeof(float) * FLOATS_PER_WALL_VERTEX, render->wall_vertex_data); CHKGL;
 
-		glEnableVertexAttribArray(render->wall_a_pos); CHKGL;
 		glVertexAttribPointer(render->wall_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, 0); CHKGL;
-
-		glEnableVertexAttribArray(render->wall_a_uv); CHKGL;
 		glVertexAttribPointer(render->wall_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
-
-		glEnableVertexAttribArray(render->wall_a_light_level); CHKGL;
 		glVertexAttribPointer(render->wall_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->wall_index_buffer); CHKGL;
 		glDrawElements(GL_TRIANGLES, render->wall_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
 
-		glDisableVertexAttribArray(render->wall_a_light_level); CHKGL;
-		glDisableVertexAttribArray(render->wall_a_uv); CHKGL;
-		glDisableVertexAttribArray(render->wall_a_pos); CHKGL;
 
-		glActiveTexture(GL_TEXTURE0); CHKGL;
-		glDisable(GL_TEXTURE_2D); CHKGL;
 	} while (render->wall_next_texture != -1);
+
+	glDisableVertexAttribArray(render->wall_a_light_level); CHKGL;
+	glDisableVertexAttribArray(render->wall_a_uv); CHKGL;
+	glDisableVertexAttribArray(render->wall_a_pos); CHKGL;
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glDisable(GL_TEXTURE_2D); CHKGL;
 }
 
 static void render_step(struct render* render)
