@@ -107,6 +107,7 @@ static const char* wall_shader_fragment_src =
 	"void main(void)\n"
 	"{\n"
 	"	float index = texture2D(u_texture, v_uv).r;\n"
+	"	if (index == 0) discard;\n" // transparency
 	"	gl_FragColor = vec4(index, light_falloff_fn(v_light_level, v_z), 0, 1);\n"
 	"}\n";
 
