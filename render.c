@@ -67,7 +67,6 @@ static const char* flat_shader_fragment_src =
 	"	float atlas_size = " STR_VALUE(MAGIC_FLAT_ATLAS_SIZE) ";\n"
 	"	vec2 uv = (clamp(fract(v_uv / flat_size) * flat_size, 0.5, flat_size - 0.5) + v_selector) / atlas_size;\n"
 	"	float index = texture2D(u_flatlas, uv).r;\n"
-	//"	gl_FragColor = vec4(index, 0, 0, 1);\n" // TODO green is light value
 	"	gl_FragColor = vec4(index, light_falloff_fn(v_light_level, v_z), 0, 1);\n"
 	"}\n";
 
