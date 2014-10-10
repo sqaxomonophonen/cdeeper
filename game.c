@@ -65,6 +65,8 @@ int main(int argc, char** argv)
 	int ctrl_backward = 0;
 	int overhead_mode = 0;
 
+	SDL_SetRelativeMouseMode(SDL_TRUE);
+
 	while (!exiting) {
 		SDL_Event e;
 
@@ -96,6 +98,15 @@ int main(int argc, char** argv)
 				if (e.key.keysym.sym == SDLK_d) ctrl_strafe_right = 0;
 				if (e.key.keysym.sym == SDLK_w) ctrl_forward = 0;
 				if (e.key.keysym.sym == SDLK_s) ctrl_backward = 0;
+			}
+
+			if (e.type == SDL_MOUSEMOTION) {
+				float sensitivity = 0.3f;
+				player.yaw += (float)e.motion.xrel * sensitivity;
+				player.pitch += (float)e.motion.yrel * sensitivity;
+				float pitch_limit = 88;
+				if (player.pitch > pitch_limit) player.pitch = pitch_limit;
+				if (player.pitch < -pitch_limit) player.pitch = -pitch_limit;
 			}
 		}
 

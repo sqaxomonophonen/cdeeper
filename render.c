@@ -1032,6 +1032,7 @@ static void gl_transform(struct render* render)
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
+	glRotatef(render->entity_cam->pitch, 1, 0, 0);
 	glRotatef(render->entity_cam->yaw, 0, 1, 0);
 	glTranslatef(-render->entity_cam->position.s[0], -render->entity_cam->z, -render->entity_cam->position.s[1]);
 
