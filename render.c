@@ -299,7 +299,7 @@ static void render_init_framebuffers(struct render* render)
 	// SEE ~/priv/git/deeper for an example of using a texture instead.
 	glGenRenderbuffers(1, &render->screen_depthbuffer); CHKGL;
 	glBindRenderbuffer(GL_RENDERBUFFER, render->screen_depthbuffer); CHKGL;
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height); CHKGL;
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, width, height); CHKGL;
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, render->screen_depthbuffer); CHKGL;
 
 	ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
@@ -317,14 +317,6 @@ static void render_init_framebuffers(struct render* render)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); CHKGL;
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, render->step_texture, level); CHKGL;
-
-	#if 1
-	GLuint dbuf;
-	glGenRenderbuffers(1, &dbuf); CHKGL;
-	glBindRenderbuffer(GL_RENDERBUFFER, dbuf); CHKGL;
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height); CHKGL;
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, dbuf); CHKGL;
-	#endif
 
 	ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
