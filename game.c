@@ -140,6 +140,16 @@ int main(int argc, char** argv)
 
 		lvl_entity_clipmove(&lvl, &player, &move);
 
+
+		// XXX hack to set Z
+		for (int i = 0; i < lvl.n_entities; i++) {
+			struct lvl_entity* e = lvl_get_entity(&lvl, i);
+			if (e->type == ENTITY_DELETED) continue;
+			struct vec2 zero;
+			vec2_zero(&zero);
+			lvl_entity_clipmove(&lvl, e, &zero);
+		}
+
 		if (overhead_mode) {
 			glClearColor(0,0,0,0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

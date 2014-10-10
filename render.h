@@ -40,11 +40,12 @@ struct render {
 	struct render_texture walls[MAX_WALLS];
 	struct render_texture sprites[MAX_SPRITES];
 
-	GLuint wall_vertex_buffer;
-	GLuint wall_index_buffer;
-	float* wall_vertex_data;
-	int32_t* wall_index_data;
-	int wall_vertex_n;
+	GLuint type0_vertex_buffer;
+	GLuint type0_index_buffer;
+	float* type0_vertex_data;
+	int32_t* type0_index_data;
+	int type0_vertex_n;
+
 	int wall_current_texture, wall_next_texture;
 	int wall_enable;
 
@@ -59,10 +60,10 @@ struct render {
 	GLuint flat_a_selector;
 	GLuint flat_a_light_level;
 
-	struct shader wall_shader;
-	GLuint wall_a_pos;
-	GLuint wall_a_uv;
-	GLuint wall_a_light_level;
+	struct shader type0_shader;
+	GLuint type0_a_pos;
+	GLuint type0_a_uv;
+	GLuint type0_a_light_level;
 
 	struct shader step_shader;
 	GLuint step_a_pos;

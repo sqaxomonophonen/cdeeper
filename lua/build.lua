@@ -161,6 +161,7 @@ return function (plan_id)
 					table.insert(self.sectors, sector)
 				end
 				for _,entity in ipairs(brick.entities) do
+					entity.position = tx:apply(entity.position)
 					table.insert(self.entities, entity)
 				end
 				-- (NOTE first sidedef is left, second is right)

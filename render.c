@@ -10,7 +10,7 @@
 
 
 #define FLOATS_PER_FLAT_VERTEX (8)
-#define FLOATS_PER_WALL_VERTEX (6)
+#define FLOATS_PER_TYPE0_VERTEX (6)
 
 // XXX TODO should roll my own matrix stack. gl_ModelViewProjectionMatrix,
 // glLoadIdentity() and so on are all deprecated
@@ -70,9 +70,8 @@ static const char* flat_shader_fragment_src =
 	"	gl_FragColor = vec4(index, light_falloff_fn(v_light_level, v_z), 0, 1);\n"
 	"}\n";
 
-
-// wall shader source
-static const char* wall_shader_vertex_src =
+// type0 shader source
+static const char* type0_shader_vertex_src =
 	"#version 130\n"
 	"\n"
 	"attribute vec3 a_pos;\n"
@@ -92,7 +91,7 @@ static const char* wall_shader_vertex_src =
 	"	gl_Position = gl_ProjectionMatrix * pos;\n"
 	"}\n";
 
-static const char* wall_shader_fragment_src =
+static const char* type0_shader_fragment_src =
 	"#version 130\n"
 	"\n"
 	"varying vec2 v_uv;\n"
@@ -346,12 +345,12 @@ static void render_init_shaders(struct render* render)
 	glUniform1i(glGetUniformLocation(render->flat_shader.program, "u_flatlas"), 0); CHKGL;
 
 	// wall shader
-	shader_init(&render->wall_shader, wall_shader_vertex_src, wall_shader_fragment_src);
-	shader_use(&render->wall_shader);
-	render->wall_a_pos = glGetAttribLocation(render->wall_shader.program, "a_pos"); CHKGL;
-	render->wall_a_uv = glGetAttribLocation(render->wall_shader.program, "a_uv"); CHKGL;
-	render->wall_a_light_level = glGetAttribLocation(render->wall_shader.program, "a_light_level"); CHKGL;
-	glUniform1i(glGetUniformLocation(render->wall_shader.program, "u_texture"), 0); CHKGL;
+	shader_init(&render->type0_shader, type0_shader_vertex_src, type0_shader_fragment_src);
+	shader_use(&render->type0_shader);
+	render->type0_a_pos = glGetAttribLocation(render->type0_shader.program, "a_pos"); CHKGL;
+	render->type0_a_uv = glGetAttribLocation(render->type0_shader.program, "a_uv"); CHKGL;
+	render->type0_a_light_level = glGetAttribLocation(render->type0_shader.program, "a_light_level"); CHKGL;
+	glUniform1i(glGetUniformLocation(render->type0_shader.program, "u_texture"), 0); CHKGL;
 
 	// step shader
 	shader_init(&render->step_shader, step_shader_vertex_src, step_shader_fragment_src);
@@ -406,6 +405,7 @@ static void static_quad_buffers(GLuint* vertex_buffer, GLuint* index_buffer, int
 
 static void render_init_buffers(struct render* render)
 {
+	// flat buffers
 	glGenBuffers(1, &render->flat_vertex_buffer); CHKGL;
 	glBindBuffer(GL_ARRAY_BUFFER, render->flat_vertex_buffer); CHKGL;
 	size_t flat_vertex_data_sz = RENDER_BUFSZ * sizeof(float) * FLOATS_PER_FLAT_VERTEX;
@@ -420,30 +420,32 @@ static void render_init_buffers(struct render* render)
 	AN(render->flat_index_data);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, flat_index_data_sz, render->flat_index_data, GL_STREAM_DRAW); CHKGL;
 
-	glGenBuffers(1, &render->wall_vertex_buffer); CHKGL;
-	glBindBuffer(GL_ARRAY_BUFFER, render->wall_vertex_buffer); CHKGL;
-	size_t wall_vertex_data_sz = RENDER_BUFSZ * sizeof(float) * FLOATS_PER_WALL_VERTEX;
-	render->wall_vertex_data = malloc(wall_vertex_data_sz);
-	AN(render->wall_vertex_data);
-	glBufferData(GL_ARRAY_BUFFER, wall_vertex_data_sz, render->wall_vertex_data, GL_STREAM_DRAW); CHKGL;
+	// wall buffers
+	glGenBuffers(1, &render->type0_vertex_buffer); CHKGL;
+	glBindBuffer(GL_ARRAY_BUFFER, render->type0_vertex_buffer); CHKGL;
+	size_t wall_vertex_data_sz = RENDER_BUFSZ * sizeof(float) * FLOATS_PER_TYPE0_VERTEX;
+	render->type0_vertex_data = malloc(wall_vertex_data_sz);
+	AN(render->type0_vertex_data);
+	glBufferData(GL_ARRAY_BUFFER, wall_vertex_data_sz, render->type0_vertex_data, GL_STREAM_DRAW); CHKGL;
 
-	glGenBuffers(1, &render->wall_index_buffer); CHKGL;
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->wall_index_buffer); CHKGL;
+	glGenBuffers(1, &render->type0_index_buffer); CHKGL;
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->type0_index_buffer); CHKGL;
 	size_t wall_index_data_sz = RENDER_BUFSZ * sizeof(uint32_t);
-	render->wall_index_data = malloc(wall_index_data_sz);
-	AN(render->wall_index_data);
+	render->type0_index_data = malloc(wall_index_data_sz);
+	AN(render->type0_index_data);
 	int offset = 0;
 	for (int i = 0; i < (RENDER_BUFSZ-6); i += 6) {
-		render->wall_index_data[i+0] = 0 + offset;
-		render->wall_index_data[i+1] = 1 + offset;
-		render->wall_index_data[i+2] = 2 + offset;
-		render->wall_index_data[i+3] = 0 + offset;
-		render->wall_index_data[i+4] = 2 + offset;
-		render->wall_index_data[i+5] = 3 + offset;
+		render->type0_index_data[i+0] = 0 + offset;
+		render->type0_index_data[i+1] = 1 + offset;
+		render->type0_index_data[i+2] = 2 + offset;
+		render->type0_index_data[i+3] = 0 + offset;
+		render->type0_index_data[i+4] = 2 + offset;
+		render->type0_index_data[i+5] = 3 + offset;
 		offset += 4;
 	}
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, wall_index_data_sz, render->wall_index_data, GL_STATIC_DRAW); CHKGL;
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, wall_index_data_sz, render->type0_index_data, GL_STATIC_DRAW); CHKGL;
 
+	// step buffers
 	static_quad_buffers(&render->step_vertex_buffer, &render->step_index_buffer, MAGIC_RWIDTH, MAGIC_RHEIGHT);
 }
 
@@ -679,20 +681,26 @@ static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sec
 	}
 }
 
-static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
+static void render_add_type0_vertex(struct render* render, float x, float y, float z, float u, float v, float ll)
 {
-	if (!render->wall_enable) return;
-	ASSERT(render->wall_vertex_n < RENDER_BUFSZ);
-	float* data = &render->wall_vertex_data[render->wall_vertex_n * FLOATS_PER_WALL_VERTEX];
+	ASSERT(render->type0_vertex_n < RENDER_BUFSZ);
+	float* data = &render->type0_vertex_data[render->type0_vertex_n * FLOATS_PER_TYPE0_VERTEX];
 	int i = 0;
 	data[i++] = x;
 	data[i++] = y;
 	data[i++] = z;
+	data[i++] = u;
+	data[i++] = v;
+	data[i++] = ll;
+	render->type0_vertex_n++;
+}
+
+static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
+{
+	if (!render->wall_enable) return;
+	ASSERT(render->type0_vertex_n < RENDER_BUFSZ);
 	struct render_texture* texture = &render->walls[render->wall_current_texture];
-	data[i++] = u / (float)texture->width;
-	data[i++] = v / (float)texture->height;
-	data[i++] = render->current_light_level;
-	render->wall_vertex_n++;
+	render_add_type0_vertex(render, x, y, z, u / (float)texture->width, v / (float)texture->height, render->current_light_level);
 }
 
 static void yield_walls(struct render* render, struct lvl* lvl)
@@ -846,17 +854,17 @@ static void render_walls(struct render* render, struct lvl* lvl)
 
 	render->wall_next_texture = -1;
 
-	shader_use(&render->wall_shader);
+	shader_use(&render->type0_shader);
 
 	glActiveTexture(GL_TEXTURE0); CHKGL;
 	glEnable(GL_TEXTURE_2D); CHKGL;
 
-	glEnableVertexAttribArray(render->wall_a_pos); CHKGL;
-	glEnableVertexAttribArray(render->wall_a_uv); CHKGL;
-	glEnableVertexAttribArray(render->wall_a_light_level); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_pos); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_uv); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_light_level); CHKGL;
 
 	do {
-		render->wall_vertex_n = 0;
+		render->type0_vertex_n = 0;
 		render->wall_current_texture = render->wall_next_texture;
 		render->wall_next_texture = -1;
 		yield_walls(render, lvl);
@@ -865,22 +873,20 @@ static void render_walls(struct render* render, struct lvl* lvl)
 
 		glBindTexture(GL_TEXTURE_2D, render->walls[render->wall_current_texture].texture); CHKGL;
 
-		glBindBuffer(GL_ARRAY_BUFFER, render->wall_vertex_buffer); CHKGL;
-		glBufferSubData(GL_ARRAY_BUFFER, 0, render->wall_vertex_n * sizeof(float) * FLOATS_PER_WALL_VERTEX, render->wall_vertex_data); CHKGL;
+		glBindBuffer(GL_ARRAY_BUFFER, render->type0_vertex_buffer); CHKGL;
+		glBufferSubData(GL_ARRAY_BUFFER, 0, render->type0_vertex_n * sizeof(float) * FLOATS_PER_TYPE0_VERTEX, render->type0_vertex_data); CHKGL;
 
-		glVertexAttribPointer(render->wall_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, 0); CHKGL;
-		glVertexAttribPointer(render->wall_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
-		glVertexAttribPointer(render->wall_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_WALL_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
+		glVertexAttribPointer(render->type0_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, 0); CHKGL;
+		glVertexAttribPointer(render->type0_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
+		glVertexAttribPointer(render->type0_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->wall_index_buffer); CHKGL;
-		glDrawElements(GL_TRIANGLES, render->wall_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
-
-
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->type0_index_buffer); CHKGL;
+		glDrawElements(GL_TRIANGLES, render->type0_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
 	} while (render->wall_next_texture != -1);
 
-	glDisableVertexAttribArray(render->wall_a_light_level); CHKGL;
-	glDisableVertexAttribArray(render->wall_a_uv); CHKGL;
-	glDisableVertexAttribArray(render->wall_a_pos); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_light_level); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_uv); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_pos); CHKGL;
 
 	glActiveTexture(GL_TEXTURE0); CHKGL;
 	glDisable(GL_TEXTURE_2D); CHKGL;
@@ -1055,12 +1061,116 @@ static void render_lvl_geom(struct render* render, struct lvl* lvl)
 
 static void render_lvl_entities(struct render* render, struct lvl* lvl)
 {
-	for (int i = 0; i < lvl->n_entities; i++) {
-		struct lvl_entity* e = lvl_get_entity(lvl, i);
-		if (e->type == ENTITY_DELETED) continue;
+	shader_use(&render->type0_shader);
 
-		//printf("TODO render entity %d (%d)\n", i, e->type);
-	}
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glEnable(GL_TEXTURE_2D); CHKGL;
+
+	glEnableVertexAttribArray(render->type0_a_pos); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_uv); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_light_level); CHKGL;
+
+	int next_texture = -1;
+	int current_texture;
+
+	// (FIXME maybe sprites ought to be atlas based?)
+	do {
+		render->type0_vertex_n = 0;
+		current_texture = next_texture;
+		next_texture = -1;
+		for (int i = 0; i < lvl->n_entities; i++) {
+			struct lvl_entity* e = lvl_get_entity(lvl, i);
+			if (e->type == ENTITY_DELETED) continue;
+
+			int texture = 0; // XXX TODO FIXME who knows this?
+
+			if (texture == current_texture) {
+				struct lvl_sector* sector = lvl_get_sector(lvl, e->sector);
+				float ll = sector->light_level;
+				struct render_texture* t = &render->sprites[texture];
+
+				struct vec2* p = &e->position;
+				struct vec2 iv;
+				vec2_sub(&iv, &render->entity_cam->position, p);
+				struct vec2 ivn;
+				vec2_normal(&ivn, &iv);
+				vec2_normalize(&ivn);
+				vec2_scalei(&ivn, (float)t->width / 2.0);
+				float z0 = e->z + 48; // XXX 48 IS MAGICK FROM lvl_entity_clipmove
+				float z1 = z0 - (float)t->height;
+
+				struct vec2 p0;
+				vec2_copy(&p0, p);
+				vec2_add_scalei(&p0, &ivn, -1.0);
+
+				struct vec2 p1;
+				vec2_copy(&p1, p);
+				vec2_add_scalei(&p1, &ivn, 1.0);
+
+				render_add_type0_vertex(
+					render,
+					p0.s[0],
+					z1,
+					p0.s[1],
+					0,1,
+					ll
+				);
+
+				render_add_type0_vertex(
+					render,
+					p1.s[0],
+					z1,
+					p1.s[1],
+					1,1,
+					ll
+				);
+
+				render_add_type0_vertex(
+					render,
+					p1.s[0],
+					z0,
+					p1.s[1],
+					1,0,
+					ll
+				);
+
+				render_add_type0_vertex(
+					render,
+					p0.s[0],
+					z0,
+					p0.s[1],
+					0,0,
+					ll
+				);
+			}
+			if (texture > current_texture && (next_texture == -1 || texture < next_texture)) {
+				next_texture = texture;
+			}
+		}
+
+		if (current_texture == -1) continue;
+
+		glBindTexture(GL_TEXTURE_2D, render->sprites[current_texture].texture); CHKGL;
+
+		//printf("spr: %d\n", render->type0_vertex_n);
+
+		glBindBuffer(GL_ARRAY_BUFFER, render->type0_vertex_buffer); CHKGL;
+		glBufferSubData(GL_ARRAY_BUFFER, 0, render->type0_vertex_n * sizeof(float) * FLOATS_PER_TYPE0_VERTEX, render->type0_vertex_data); CHKGL;
+
+		glVertexAttribPointer(render->type0_a_pos, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, 0); CHKGL;
+		glVertexAttribPointer(render->type0_a_uv, 2, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, (char*)(sizeof(float)*3)); CHKGL;
+		glVertexAttribPointer(render->type0_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->type0_index_buffer); CHKGL;
+		glDrawElements(GL_TRIANGLES, render->type0_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
+	} while (next_texture != -1);
+
+	glDisableVertexAttribArray(render->type0_a_light_level); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_uv); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_pos); CHKGL;
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glDisable(GL_TEXTURE_2D); CHKGL;
 }
 
 void render_lvl(struct render* render, struct lvl* lvl)
