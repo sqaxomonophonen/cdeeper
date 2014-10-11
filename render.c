@@ -1089,7 +1089,7 @@ static void render_lvl_entities(struct render* render, struct lvl* lvl)
 				vec2_normal(&ivn, &iv);
 				vec2_normalize(&ivn);
 				vec2_scalei(&ivn, (float)t->width / 2.0);
-				float z0 = e->z + 48; // XXX 48 IS MAGICK FROM lvl_entity_clipmove
+				float z0 = e->z + MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT;
 				float z1 = z0 - (float)t->height;
 
 				struct vec2 p0;

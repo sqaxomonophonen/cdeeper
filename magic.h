@@ -23,5 +23,8 @@
 #define MAGIC_STOP_THRESHOLD (5)
 
 
+#define MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT (48)
+
+
 
 #endif/*MAGIC_H*/

@@ -344,7 +344,7 @@ int32_t lvl_sector_find(struct lvl* lvl, struct vec2* p)
 
 void lvl_entity_update_sector(struct lvl* lvl, struct lvl_entity* entity)
 {
-	// XXX use previous sector value as a good guess, and check neighbours
+	// XXX TODO use previous sector value as a good guess, and check neighbours
 	for (int i = 0; i < lvl->n_sectors; i++) {
 		if (lvl_sector_inside(lvl, i, &entity->position)) {
 			entity->sector = i;
@@ -356,7 +356,7 @@ void lvl_entity_update_sector(struct lvl* lvl, struct lvl_entity* entity)
 
 float lvl_entity_radius(struct lvl_entity* entity)
 {
-	return 32; // XXX?
+	return 32; // XXX? TODO get from entities.inc.h
 }
 
 static void lvl_entity_vec3_position(struct lvl_entity* entity, struct vec3* position)
@@ -402,7 +402,11 @@ void lvl_entity_mouse(struct lvl_entity* entity, struct vec3* pos, struct vec3* 
 	vec3_normalize(mdir);
 }
 
-static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, int32_t sectori, int32_t ci)
+struct clip_result {
+	// TODO what did we intersect with?
+};
+
+static void entclip_sector_contour(struct clip_result* result, struct lvl* lvl, struct lvl_entity* entity, int32_t sectori, int32_t ci)
 {
 	struct lvl_contour* c = lvl_get_contour(lvl, ci);
 	struct lvl_linedef* l = lvl_get_linedef(lvl, c->linedef);
@@ -458,6 +462,19 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 
 		if (l->sidedef[0] == -1 || l->sidedef[1] == -1) {
 			impassable = 1;
+		} else {
+			for (int side = 0; side < 2; side++) {
+				if (l->sidedef[side] == -1) continue;
+				struct lvl_sidedef* sidedef = lvl_get_sidedef(lvl, l->sidedef[side]);
+				struct lvl_sector* sector = lvl_get_sector(lvl, sidedef->sector);
+
+				// XXX FIXME calculate sloped planes
+				// intersection compensated for entity height..
+				// and radius? XXX currently assuming non-sloped planes
+
+				float headroom = fabs(sector->flat[0].plane.s[3] + sector->flat[1].plane.s[3]);
+				if (headroom < MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT) impassable = 1;
+			}
 		}
 
 		if (impassable) {
@@ -466,23 +483,22 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 	}
 }
 
-static void entclip_sector(struct lvl* lvl, struct lvl_entity* entity, int32_t sectori)
+static void entclip_sector(struct clip_result* result, struct lvl* lvl, struct lvl_entity* entity, int32_t sectori)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 
 	for (int i = 0; i < sector->contourn; i++) {
 		int32_t ci = sector->contour0 + i;
-		entclip_sector_contour(lvl, entity, sectori, ci);
+		entclip_sector_contour(result, lvl, entity, sectori, ci);
 	}
 }
 
 
-static void entclip(struct lvl* lvl, struct lvl_entity* entity)
+static void entclip(struct clip_result* result, struct lvl* lvl, struct lvl_entity* entity)
 {
-	//if (entity->sector == -1) return;
-
+	// TODO optimize to only consider neighbouring sectors
 	for (int i = 0; i < lvl->n_sectors; i++) {
-		entclip_sector(lvl, entity, i);
+		entclip_sector(result, lvl, entity, i);
 	}
 }
 
@@ -498,7 +514,9 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, float dt)
 {
 	// apply friction
 	vec2_scalei(&entity->velocity, powf(MAGIC_FRICTION_MAGNITUDE, dt));
-	if (vec2_dot(&entity->velocity, &entity->velocity) < MAGIC_STOP_THRESHOLD) vec2_zero(&entity->velocity);
+	if (vec2_dot(&entity->velocity, &entity->velocity) < MAGIC_STOP_THRESHOLD) {
+		vec2_zero(&entity->velocity);
+	}
 
 	struct vec2 move;
 	vec2_copy(&move, &entity->velocity);
@@ -514,15 +532,19 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, float dt)
 		struct vec2 move_fragment;
 		vec2_scale(&move_fragment, &move, fragment);
 		vec2_addi(&entity->position, &move_fragment);
-		entclip(lvl, entity);
+
+		struct clip_result clip_result;
+		entclip(&clip_result, lvl, entity);
 	}
 
+
 	lvl_entity_update_sector(lvl, entity);
+
 	// XXX updating z here, but that's not how all entities work (or eventually any)
 	if (entity->sector != -1) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, entity->sector);
 		struct plane* plane = &sector->flat[0].plane;
-		float height = 48;
+		float height = MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT;
 		entity->z = plane_z(plane, &entity->position) + height;
 	}
 
