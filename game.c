@@ -103,10 +103,12 @@ int main(int argc, char** argv)
 			if (e.type == SDL_MOUSEMOTION) {
 				float sensitivity = 0.3f;
 				player.yaw += (float)e.motion.xrel * sensitivity;
-				player.pitch += (float)e.motion.yrel * sensitivity;
-				float pitch_limit = 88;
-				if (player.pitch > pitch_limit) player.pitch = pitch_limit;
-				if (player.pitch < -pitch_limit) player.pitch = -pitch_limit;
+				if (!overhead_mode) {
+					player.pitch += (float)e.motion.yrel * sensitivity;
+					float pitch_limit = 88;
+					if (player.pitch > pitch_limit) player.pitch = pitch_limit;
+					if (player.pitch < -pitch_limit) player.pitch = -pitch_limit;
+				}
 			}
 		}
 
