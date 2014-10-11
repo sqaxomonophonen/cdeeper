@@ -16,4 +16,12 @@
 #define INNER_STR_VALUE(arg)	#arg
 #define STR_VALUE(arg)	INNER_STR_VALUE(arg)
 
+
+
+#define MAGIC_ACCELERATION_MAGNITUDE (10000)
+#define MAGIC_FRICTION_MAGNITUDE (0.0005)
+#define MAGIC_STOP_THRESHOLD (5)
+
+
+
 #endif/*MAGIC_H*/

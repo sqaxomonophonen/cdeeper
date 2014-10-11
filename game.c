@@ -120,47 +120,41 @@ int main(int argc, char** argv)
 			player.yaw += dt * turn_speed * sgn;
 		}
 
-		struct vec2 move;
-		move.s[0] = 0;
-		move.s[1] = 0;
-
 		struct vec2 forward;
 		vec2_angle(&forward, player.yaw);
 		struct vec2 right;
 		vec2_normal(&right, &forward);
 
 		if (ctrl_forward || ctrl_backward) {
-			float move_speed = 12;
+			float move_force = 1;
 			float sgn = 0;
 			if (ctrl_forward) sgn -= 1.0f;
 			if (ctrl_backward) sgn += 1.0f;
-			struct vec2 dmove;
-			vec2_copy(&dmove, &forward);
-			vec2_scalei(&dmove, move_speed * sgn);
-			vec2_addi(&move, &dmove);
+			struct vec2 accel;
+			vec2_copy(&accel, &forward);
+			vec2_scalei(&accel, move_force * sgn);
+			lvl_entity_accelerate(&lvl, &player, &accel, dt);
 		}
 
 		if (ctrl_strafe_left || ctrl_strafe_right) {
-			float strafe_speed = 7;
+			float strafe_force = 0.7;
 			float sgn = 0;
 			if (ctrl_strafe_left) sgn -= 1.0f;
 			if (ctrl_strafe_right) sgn += 1.0f;
-			struct vec2 dmove;
-			vec2_copy(&dmove, &right);
-			vec2_scalei(&dmove, strafe_speed * sgn);
-			vec2_addi(&move, &dmove);
+			struct vec2 accel;
+			vec2_copy(&accel, &right);
+			vec2_scalei(&accel, strafe_force * sgn);
+			lvl_entity_accelerate(&lvl, &player, &accel, dt);
 		}
 
-		lvl_entity_clipmove(&lvl, &player, &move);
+		lvl_entity_clipmove(&lvl, &player, dt);
 
 
 		// XXX hack to set Z
 		for (int i = 0; i < lvl.n_entities; i++) {
 			struct lvl_entity* e = lvl_get_entity(&lvl, i);
 			if (e->type == ENTITY_DELETED) continue;
-			struct vec2 zero;
-			vec2_zero(&zero);
-			lvl_entity_clipmove(&lvl, e, &zero);
+			lvl_entity_clipmove(&lvl, e, dt);
 		}
 
 		if (overhead_mode) {

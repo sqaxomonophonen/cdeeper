@@ -50,6 +50,7 @@ struct lvl_contour {
 struct lvl_entity {
 	int32_t type;
 	struct vec2 position;
+	struct vec2 velocity;
 	float z;
 	float yaw;
 	float pitch;
@@ -99,7 +100,8 @@ struct lvl_contour* lvl_get_contour(struct lvl* lvl, int32_t i);
 
 void lvl_entity_update_sector(struct lvl* lvl, struct lvl_entity* entity);
 
-void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2* move);
+void lvl_entity_accelerate(struct lvl* lvl, struct lvl_entity* entity, struct vec2* acceleration, float dt);
+void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, float dt);
 
 void lvl_build_contours(struct lvl* lvl);
 

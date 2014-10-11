@@ -5,6 +5,7 @@
 
 #include "a.h"
 #include "lvl.h"
+#include "magic.h"
 
 void lvl_init(struct lvl* lvl)
 {
@@ -430,7 +431,6 @@ static void entclip_sector_contour(struct lvl* lvl, struct lvl_entity* entity, i
 		float epsilon = 1e-3f;
 		float vlength = vec2_length(&vd);
 		vec2_normalize(&vd);
-		//float u = vec2_dot(&dw, &vd);
 		float u = vec2_dot(&vd, &dw);
 		if (u >= 0 && u <= vlength) {
 			float push = radius - dabs + epsilon;
@@ -486,10 +486,25 @@ static void entclip(struct lvl* lvl, struct lvl_entity* entity)
 	}
 }
 
-void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2* move)
+void lvl_entity_accelerate(struct lvl* lvl, struct lvl_entity* entity, struct vec2* acceleration, float dt)
 {
-	//printf("\n\n\nCLIPMOVE\n");
-	float move_length = vec2_length(move);
+	struct vec2 dvel;
+	vec2_copy(&dvel, acceleration);
+	vec2_scalei(&dvel, dt * MAGIC_ACCELERATION_MAGNITUDE);
+	vec2_addi(&entity->velocity, &dvel);
+}
+
+void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, float dt)
+{
+	// apply friction
+	vec2_scalei(&entity->velocity, powf(MAGIC_FRICTION_MAGNITUDE, dt));
+	if (vec2_dot(&entity->velocity, &entity->velocity) < MAGIC_STOP_THRESHOLD) vec2_zero(&entity->velocity);
+
+	struct vec2 move;
+	vec2_copy(&move, &entity->velocity);
+	vec2_scalei(&move, dt);
+
+	float move_length = vec2_length(&move);
 
 	int nsteps = (int)ceilf(move_length/(lvl_entity_radius(entity)/64));
 	if (nsteps < 1) nsteps = 1;
@@ -497,7 +512,7 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2
 
 	for (int i = 0; i < nsteps; i++) {
 		struct vec2 move_fragment;
-		vec2_scale(&move_fragment, move, fragment);
+		vec2_scale(&move_fragment, &move, fragment);
 		vec2_addi(&entity->position, &move_fragment);
 		entclip(lvl, entity);
 	}
@@ -510,6 +525,7 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, struct vec2
 		float height = 48;
 		entity->z = plane_z(plane, &entity->position) + height;
 	}
+
 }
 
 int lvl_trace(
