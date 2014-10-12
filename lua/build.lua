@@ -116,7 +116,7 @@ return function (plan_id)
 				local bv0 = brick.vertices[bv0i]
 				local bv1 = brick.vertices[bv1i]
 
-				local tx = mat33.map33(bv0, bv1, sv0, sv1)
+				local tx = mat33.homogeneous_map33(bv0, bv1, sv0, sv1)
 
 				local sidedef_offset = #self.sidedefs
 				local sector_offset = #self.sectors
@@ -124,7 +124,7 @@ return function (plan_id)
 				local vertex_map = {[bv0i]=sv0i,[bv1i]=sv1i}
 				for i = 1,#brick.vertices do
 					if i ~= bv0i and i ~= bv1i then
-						table.insert(self.vertices, tx:apply(brick.vertices[i]))
+						table.insert(self.vertices, tx:homogeneous_apply(brick.vertices[i]))
 						vertex_map[i] = #self.vertices
 					end
 				end
@@ -161,7 +161,7 @@ return function (plan_id)
 					table.insert(self.sectors, sector)
 				end
 				for _,entity in ipairs(brick.entities) do
-					entity.position = tx:apply(entity.position)
+					entity.position = tx:homogeneous_apply(entity.position)
 					table.insert(self.entities, entity)
 				end
 				-- (NOTE first sidedef is left, second is right)

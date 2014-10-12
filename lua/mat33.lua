@@ -18,11 +18,15 @@ mt.col = function (self, j)
 end
 
 mt.apply = function (self, v)
-	v3 = vec3{v[1], v[2], 1}
 	local r = {}
 	for i = 1,3 do
-		table.insert(r, v3:dot(self:row(i)))
+		table.insert(r, v:dot(self:row(i)))
 	end
+	return r
+end
+
+mt.homogeneous_apply = function (self, v)
+	local r = self:apply(vec3{v[1], v[2], 1})
 	local v2 = vec2{r[1], r[2]}
 	return v2:scale(1/r[3])
 end
@@ -99,12 +103,6 @@ mt.inverse = function (self)
 	return self:adjugate():scale(1 / self:determinant())
 end
 
-mt.applyfn = function (self)
-	return function (v)
-		return self:apply(v)
-	end
-end
-
 mt.__mul = function (self, other)
 	local product = {}
 	for i = 1,3 do
@@ -129,33 +127,33 @@ static.identity = function ()
 	return static.new{1,0,0, 0,1,0, 0,0,1}
 end
 
-static.rotate = function (phi)
+static.homogeneous_rotate = function (phi)
 	local c = math.cos(phi)
 	local s = math.sin(phi)
 	return static.new{c,s,0, -s,c,0, 0,0,1}
 end
 
-static.translate = function (t)
+static.homogeneous_translate = function (t)
 	return static.new{1,0,t[1], 0,1,t[2], 0,0,1}
 end
 
-static.scale = function (s)
+static.homogeneous_scale = function (s)
 	return static.new{s,0,0, 0,s,0, 0,0,1}
 end
 
-static.basis = function (v)
+static.homogeneous_basis = function (v)
 	local n = v:normal()
 	return static.new{v[1],n[1],0, v[2],n[2],0, 0,0,1}
 end
 
 -- matrix that maps a to b
-static.map22 = function (a, b)
-	return  static.basis(b) * static.basis(a):inverse()
+static.homogeneous_map22 = function (a, b)
+	return static.homogeneous_basis(b) * static.homogeneous_basis(a):inverse()
 end
 
 -- matrix that maps au->av to bu->bv
-static.map33 = function (au, av, bu, bv)
-	return static.translate(bu) * static.map22(av-au, bv-bu) * static.translate(-au)
+static.homogeneous_map33 = function (au, av, bu, bv)
+	return static.homogeneous_translate(bu) * static.homogeneous_map22(av-au, bv-bu) * static.homogeneous_translate(-au)
 end
 
 return setmetatable(static, {__call = function(_, ...) return static.new(...) end })

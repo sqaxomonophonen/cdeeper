@@ -29,8 +29,8 @@ function render_grid(bag)
 	local txi = bag.txi
 	local sz = bag.grid_size
 
-	local c0 = txi:apply(vec2{0,0})
-	local c1 = txi:apply(vec2{love.graphics.getWidth(),love.graphics.getHeight()})
+	local c0 = txi:homogeneous_apply(vec2{0,0})
+	local c1 = txi:homogeneous_apply(vec2{love.graphics.getWidth(),love.graphics.getHeight()})
 
 	local x0 = c0[1] - c0[1]%sz
 	local y0 = c0[2] - c0[2]%sz
@@ -56,14 +56,14 @@ function render_grid(bag)
 
 	for x = x0,x1,sz do
 		zcol(x)
-		local v0 = tx:apply(vec2{x,y0})
-		local v1 = tx:apply(vec2{x,y1})
+		local v0 = tx:homogeneous_apply(vec2{x,y0})
+		local v1 = tx:homogeneous_apply(vec2{x,y1})
 		love.graphics.line(v0[1], v0[2], v1[1], v1[2])
 	end
 	for y = y0,y1,sz do
 		zcol(y)
-		local v0 = tx:apply(vec2{x0,y})
-		local v1 = tx:apply(vec2{x1,y})
+		local v0 = tx:homogeneous_apply(vec2{x0,y})
+		local v1 = tx:homogeneous_apply(vec2{x1,y})
 		love.graphics.line(v0[1], v0[2], v1[1], v1[2])
 	end
 end
@@ -96,12 +96,12 @@ end
 
 function tx_txi_mtx(nav)
 	local tx = mat33.identity()
-	tx = tx * mat33.translate{love.graphics.getWidth()/2, love.graphics.getHeight()/2}
-	tx = tx * mat33.translate(nav.pan)
-	tx = tx * mat33.scale(nav.scale)
+	tx = tx * mat33.homogeneous_translate{love.graphics.getWidth()/2, love.graphics.getHeight()/2}
+	tx = tx * mat33.homogeneous_translate(nav.pan)
+	tx = tx * mat33.homogeneous_scale(nav.scale)
 
 	local txi = tx:inverse()
-	local mousetx = txi:apply(mouse_vec2())
+	local mousetx = txi:homogeneous_apply(mouse_vec2())
 
 	return tx, txi, mousetx
 end
@@ -150,7 +150,7 @@ function mouse_vertex(bag)
 	local nr = nil
 	local ni = nil
 	for i,v in ipairs(bag.brick.vertices) do
-		local vtx = bag.tx:apply(v)
+		local vtx = bag.tx:homogeneous_apply(v)
 		local r = (vtx-bag.mouse):length()
 		if ni == nil or r < nr then
 			ni = i
@@ -169,8 +169,8 @@ function mouse_linedef(bag)
 	local nsd = nil
 	local ni = nil
 	for i,ld in ipairs(bag.brick.linedefs) do
-		local v0 = bag.tx:apply(bag.brick.vertices[ld.vertex[1]])
-		local v1 = bag.tx:apply(bag.brick.vertices[ld.vertex[2]])
+		local v0 = bag.tx:homogeneous_apply(bag.brick.vertices[ld.vertex[1]])
+		local v1 = bag.tx:homogeneous_apply(bag.brick.vertices[ld.vertex[2]])
 		local len = (v1-v0):length()
 		local vd = (v1-v0):normalize()
 		local dw = bag.mouse - v0
@@ -539,7 +539,7 @@ vertex = {
 
 	block_select = function (self, bag, p0, pdim)
 		for i,v in ipairs(bag.brick.vertices) do
-			local vtx = bag.tx:apply(v)
+			local vtx = bag.tx:homogeneous_apply(v)
 			if rect_test(vtx, p0, pdim) then
 				selection:toggle_one(i)
 			end
@@ -604,8 +604,8 @@ linedef = {
 	pre_render = function (self, bag)
 		bag.highlighted_vertex = self:_mouse_vertex(bag)
 		if self.last_vertex then
-			local v0 = bag.tx:apply(bag.brick.vertices[self.last_vertex])
-			local v1 = bag.tx:apply(bag.highlighted_vertex and bag.brick.vertices[bag.highlighted_vertex] or snap_to_grid_or_dont(bag, bag.mousetx))
+			local v0 = bag.tx:homogeneous_apply(bag.brick.vertices[self.last_vertex])
+			local v1 = bag.tx:homogeneous_apply(bag.highlighted_vertex and bag.brick.vertices[bag.highlighted_vertex] or snap_to_grid_or_dont(bag, bag.mousetx))
 			love.graphics.setColor{70,70,255,255}
 			love.graphics.line(v0[1], v0[2], v1[1], v1[2])
 		end
@@ -623,7 +623,7 @@ linedef = {
 		local vertices = {}
 		local toggled = {}
 		for i,v in ipairs(bag.brick.vertices) do
-			local vtx = bag.tx:apply(v)
+			local vtx = bag.tx:homogeneous_apply(v)
 			if rect_test(vtx, p0, pdim) then
 				vertices[i] = true
 			end
@@ -767,8 +767,8 @@ sidedef = {
 		local i, d = mouse_linedef(bag)
 		if i then
 			local ld = bag.brick.linedefs[i]
-			local vtx0 = bag.tx:apply(bag.brick.vertices[ld.vertex[1]])
-			local vtx1 = bag.tx:apply(bag.brick.vertices[ld.vertex[2]])
+			local vtx0 = bag.tx:homogeneous_apply(bag.brick.vertices[ld.vertex[1]])
+			local vtx1 = bag.tx:homogeneous_apply(bag.brick.vertices[ld.vertex[2]])
 			local v = (vtx1-vtx0):normalize()
 			local n = v:normal()
 			local sgn = d>0 and 1 or -1
@@ -803,7 +803,7 @@ sidedef = {
 	block_select = function (self, bag, p0, pdim)
 		local vertices = {}
 		for i,v in ipairs(bag.brick.vertices) do
-			local vtx = bag.tx:apply(v)
+			local vtx = bag.tx:homogeneous_apply(v)
 			if rect_test(vtx, p0, pdim) then
 				vertices[i] = true
 			end
@@ -893,7 +893,7 @@ sector = {
 	block_select = function (self, bag, p0, pdim)
 		local vertices = {}
 		for i,v in ipairs(bag.brick.vertices) do
-			local vtx = bag.tx:apply(v)
+			local vtx = bag.tx:homogeneous_apply(v)
 			if rect_test(vtx, p0, pdim) then
 				vertices[i] = true
 			end
@@ -1064,7 +1064,7 @@ entity = {
 
 	block_select = function (self, bag, p0, pdim)
 		for i,e in ipairs(bag.brick.entities) do
-			local vtx = bag.tx:apply(e.position)
+			local vtx = bag.tx:homogeneous_apply(e.position)
 			if rect_test(vtx, p0, pdim) then
 				selection:toggle_one(i)
 			end
@@ -1101,8 +1101,8 @@ function render_brick(bag)
 		else
 			love.graphics.setColor{70,70,70,255}
 		end
-		local vtx0 = bag.tx:apply(bag.brick.vertices[ld.vertex[1]])
-		local vtx1 = bag.tx:apply(bag.brick.vertices[ld.vertex[2]])
+		local vtx0 = bag.tx:homogeneous_apply(bag.brick.vertices[ld.vertex[1]])
+		local vtx1 = bag.tx:homogeneous_apply(bag.brick.vertices[ld.vertex[2]])
 		love.graphics.line(vtx0[1], vtx0[2], vtx1[1], vtx1[2])
 
 		for _,side in ipairs{-1,1} do
@@ -1131,7 +1131,7 @@ function render_brick(bag)
 	end
 
 	for i,v in ipairs(bag.brick.vertices) do
-		local vtx = bag.tx:apply(v)
+		local vtx = bag.tx:homogeneous_apply(v)
 		if (bag.mode == modes.vertex or bag.mode.previous_mode == modes.vertex) and selection:has(i) then
 			love.graphics.setColor(MAGIC.selection_color)
 		else
@@ -1146,7 +1146,7 @@ function render_brick(bag)
 
 	for i,e in ipairs(bag.brick.entities) do
 		local et = entity_type_map[e.type]
-		local vtx = bag.tx:apply(e.position)
+		local vtx = bag.tx:homogeneous_apply(e.position)
 		if (bag.mode == modes.entity or bag.mode.previous_mode == modes.entity) and selection:has(i) then
 			love.graphics.setColor(MAGIC.selection_color)
 		else
@@ -1240,7 +1240,7 @@ function tx_mode(bag, impl)
 			love.graphics.setColor(30,100,230,255)
 			local vz = {}
 			for _,p in pairs(positions) do
-				local ptx = bag.tx:apply(impl:transform(self, bag, p))
+				local ptx = bag.tx:homogeneous_apply(impl:transform(self, bag, p))
 				love.graphics.circle('fill', ptx[1], ptx[2], 7, 6)
 			end
 		end,
@@ -1280,15 +1280,15 @@ function scale_mode(bag)
 			end
 
 			local op = mat33.identity()
-			op = op * mat33.translate(txmode.center)
-			op = op * mat33.scale(dscale)
-			op = op * mat33.translate(-txmode.center)
+			op = op * mat33.homogeneous_translate(txmode.center)
+			op = op * mat33.homogeneous_scale(dscale)
+			op = op * mat33.homogeneous_translate(-txmode.center)
 
-			return op:apply(v)
+			return op:homogeneous_apply(v)
 		end,
 		render_gui = function (self, txmode, bag)
-			local p0 = bag.tx:apply(txmode.center)
-			local p1 = bag.tx:apply(txmode.p1)
+			local p0 = bag.tx:homogeneous_apply(txmode.center)
+			local p1 = bag.tx:homogeneous_apply(txmode.p1)
 			love.graphics.setColor(0,255,255,255)
 			love.graphics.line(p0[1], p0[2], p1[1], p1[2])
 		end
@@ -1309,18 +1309,18 @@ function rotate_mode(bag)
 		end,
 		transform = function (self, txmode, bag, v)
 			local op = mat33.identity()
-			op = op * mat33.translate(txmode.center)
-			op = op * mat33.rotate(self._phi(txmode, bag))
-			op = op * mat33.translate(-txmode.center)
+			op = op * mat33.homogeneous_translate(txmode.center)
+			op = op * mat33.homogeneous_rotate(self._phi(txmode, bag))
+			op = op * mat33.homogeneous_translate(-txmode.center)
 
-			return op:apply(v)
+			return op:homogeneous_apply(v)
 		end,
 		tx_info = function (self, txmode, bag)
 			return {rotation = self._phi(txmode, bag)}
 		end,
 		render_gui = function (self, txmode, bag)
-			local p0 = bag.tx:apply(txmode.center)
-			local p1 = bag.tx:apply(txmode.p1)
+			local p0 = bag.tx:homogeneous_apply(txmode.center)
+			local p1 = bag.tx:homogeneous_apply(txmode.p1)
 			love.graphics.setColor(0,255,255,255)
 			love.graphics.line(p0[1], p0[2], p1[1], p1[2])
 		end
