@@ -122,6 +122,13 @@ void vec2_add_scalei(struct vec2* dst, struct vec2* src, float scalar)
 	}
 }
 
+void vec2_lerp(struct vec2* dst, struct vec2* a, struct vec2* b, float t)
+{
+	for (int i = 0; i < 2; i++) {
+		dst->s[i] = a->s[i] + (b->s[i] - a->s[i]) * t;
+	}
+}
+
 void vec3_from_vec2(struct vec3* v3, struct vec2* v2)
 {
 	for (int i = 0; i < 2; i++) {
@@ -134,6 +141,13 @@ void vec2_from_vec3(struct vec2* v2, struct vec3* v3)
 {
 	for (int i = 0; i < 2; i++) {
 		v2->s[i] = v3->s[i];
+	}
+}
+
+void vec3_zero(struct vec3* v)
+{
+	for (int i = 0; i < 3; i++) {
+		v->s[i] = 0;
 	}
 }
 

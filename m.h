@@ -1,6 +1,8 @@
 #ifndef M_H
 #define M_H
 
+#define EPSILON (1e-4)
+
 struct vec2 {
 	float s[2];
 };
@@ -19,12 +21,14 @@ void vec2_copy(struct vec2* dst, struct vec2* src);
 //float vec2_distance(struct vec2* a, struct vec2* b);
 void vec2_angle(struct vec2* v, float degrees);
 void vec2_add_scalei(struct vec2* dst, struct vec2* src, float scalar);
+void vec2_lerp(struct vec2* dst, struct vec2* a, struct vec2* b, float t);
 
 
 struct vec3 {
 	float s[3];
 };
 
+void vec3_zero(struct vec3* v);
 void vec3_scale(struct vec3* dst, struct vec3* src, float scalar);
 void vec3_scalei(struct vec3* dst, float scalar);
 void vec3_addi(struct vec3* dst, struct vec3* src);

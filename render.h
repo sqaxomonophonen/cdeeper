@@ -45,6 +45,7 @@ struct render {
 	float* type0_vertex_data;
 	int32_t* type0_index_data;
 	int type0_vertex_n;
+	int type0_index_n;
 
 	int wall_current_texture, wall_next_texture;
 	int wall_enable;
@@ -90,7 +91,8 @@ struct render {
 		struct lvl* lvl,
 		int sectori,
 		int contouri,
-		int dz
+		int dz,
+		int nvertices
 	);
 	void (*add_wall_vertex)(
 		struct render* render,
