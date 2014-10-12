@@ -5,8 +5,12 @@ local static = {}
 local mt = {}
 mt.__index = mt
 
+mt.ati = function (self, i, j)
+	return (i-1)*3+j
+end
+
 mt.at = function (self, i, j)
-	return self[(i-1)*3+j]
+	return self[self:ati(i,j)]
 end
 
 mt.row = function (self, i)
@@ -22,7 +26,7 @@ mt.apply = function (self, v)
 	for i = 1,3 do
 		table.insert(r, v:dot(self:row(i)))
 	end
-	return r
+	return vec3(r)
 end
 
 mt.homogeneous_apply = function (self, v)

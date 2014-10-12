@@ -1,5 +1,7 @@
 local vec2 = require('vec2')
 local mat33 = require('mat33')
+local mat44 = require('mat44')
+local plane = require('plane')
 
 function shuffle(list)
 	local copy = {}
@@ -90,7 +92,7 @@ return function (plan_id)
 			self.entities = brick.entities
 		end,
 
-		add_brick = function (self, brick)
+		insert_brick = function (self, brick)
 			if #self.vertices == 0 then
 				return self:add_initial_brick(brick)
 			else
@@ -117,6 +119,8 @@ return function (plan_id)
 				local bv1 = brick.vertices[bv1i]
 
 				local tx = mat33.homogeneous_map33(bv0, bv1, sv0, sv1)
+				local tx4 = mat44.from_homogeneous_mat33(tx)
+				-- TODO z-transform? just line sv0i up with bv1i?
 
 				local sidedef_offset = #self.sidedefs
 				local sector_offset = #self.sectors
@@ -155,13 +159,20 @@ return function (plan_id)
 				end
 				for _,sd in ipairs(brick.sidedefs) do
 					sd.sector = sd.sector + sector_offset
+					-- TODO texture transform (z only?)
 					table.insert(self.sidedefs, sd)
 				end
 				for _,sector in ipairs(brick.sectors) do
+					-- TODO texture transform
+					for flati=1,2 do
+						local flat = sector.flat[flati]
+						flat.plane = flat.plane:transform(tx4)
+					end
 					table.insert(self.sectors, sector)
 				end
 				for _,entity in ipairs(brick.entities) do
 					entity.position = tx:homogeneous_apply(entity.position)
+					-- TODO entity rotation transform
 					table.insert(self.entities, entity)
 				end
 				-- (NOTE first sidedef is left, second is right)
@@ -169,19 +180,26 @@ return function (plan_id)
 		end
 	}
 
-	local handle_brick = function (name)
+	local insert_brick = function (name)
 		local brick = dofile("lua/bricks/" .. name .. ".lua")
 
 		-- bless vertices
 		for i = 1,#brick.vertices do brick.vertices[i] = vec2(brick.vertices[i]) end
 
-		lvl:add_brick(brick)
+		-- bless planes
+		for i = 1,#brick.sectors do
+			for j = 1,2 do
+				brick.sectors[i].flat[j].plane = plane(brick.sectors[i].flat[j].plane)
+			end
+		end
+
+		lvl:insert_brick(brick)
 
 	end
 
 	for _,thing in ipairs(load_plan(plan_id)) do
 		local handlers = {
-			["$"] = handle_brick
+			["$"] = insert_brick
 		}
 		handlers[string.sub(thing, 1, 1)](string.sub(thing, 2))
 	end
