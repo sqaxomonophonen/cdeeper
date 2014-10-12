@@ -106,6 +106,8 @@ int main(int argc, char** argv)
 		ED_LIGHT_LEVEL
 	} ed = ED_NONE;
 
+	struct lvl_trace_result trace_result;
+	struct vec3 clicked_position;
 
 	while (!exiting) {
 		SDL_Event e;
@@ -196,6 +198,7 @@ int main(int argc, char** argv)
 				int button = e.button.button;
 				if (button == 1) {
 					tooling = 1;
+					vec3_copy(&clicked_position, &trace_result.position);
 				}
 				if (button == 3) {
 					do_select = 1;
@@ -211,6 +214,7 @@ int main(int argc, char** argv)
 
 			if (e.type == SDL_MOUSEWHEEL) {
 				tool_dy += e.wheel.y;
+				vec3_copy(&clicked_position, &trace_result.position);
 			}
 		}
 
@@ -298,7 +302,14 @@ int main(int argc, char** argv)
 					for (int flati = 0; flati < 2; flati++) {
 						if (sector->usr & (flati == 0 ? LVL_SELECTED_ZMINUS : LVL_SELECTED_ZPLUS)) {
 							struct lvl_flat* flat = &sector->flat[flati];
+
+							struct vec3 neg;
+							vec3_scale(&neg, &clicked_position, -1);
+							plane_translate(&flat->plane, &neg);
+
 							mat33_applyi(&tx, &flat->plane.normal);
+
+							plane_translate(&flat->plane, &clicked_position);
 						}
 					}
 				}
@@ -412,7 +423,6 @@ int main(int argc, char** argv)
 			struct vec3 pos;
 			struct vec3 mdir;
 			lvl_entity_mouse(&player, &pos, &mdir, render_get_fovy(&render), mouse_x, mouse_y, width, height);
-			struct lvl_trace_result trace_result;
 			//int sectori = lvl_sector_find(&lvl, &player.p);
 			//int sectori = player.sector;
 			lvl_trace(&lvl, player.sector, &pos, &mdir, &trace_result);
