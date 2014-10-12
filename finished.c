@@ -26,7 +26,7 @@ int main(int argc, char** argv)
 	int bitmask = SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_OPENGL;
 
 	SDL_Window* window = SDL_CreateWindow(
-		"finished",
+		"FinishEd",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		0, 0,
 		bitmask);
