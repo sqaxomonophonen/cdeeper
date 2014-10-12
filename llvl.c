@@ -125,7 +125,11 @@ static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
 	for (int i = 0; i < 4; i++) {
 		lua_rawgeti(L, -1, i+1);
-		flat->plane.s[i] = lua_tointeger(L, -1);
+		if (i == 3) {
+			flat->plane.d = lua_tointeger(L, -1);
+		} else {
+			flat->plane.normal.s[i] = lua_tointeger(L, -1);
+		}
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
@@ -377,7 +381,11 @@ static void write_flat(lua_State* L, struct lvl_sector* sector, int index)
 
 	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
 	for (int i = 0; i < 4; i++) {
-		lua_pushnumber(L, flat->plane.s[i]);
+		if (i == 3) {
+			lua_pushnumber(L, flat->plane.d);
+		} else {
+			lua_pushnumber(L, flat->plane.normal.s[i]);
+		}
 		lua_rawseti(L, -2, i+1);
 	}
 	lua_pop(L, 1);

@@ -1,21 +1,27 @@
+#include <stdlib.h>
 #include <math.h>
 #include "m.h"
 #include "a.h"
 
+void plane_translate(struct plane* plane, struct vec3* translation)
+{
+	plane->d -= vec3_dot(&plane->normal, translation);
+}
+
 void plane_floor(struct plane* p, float z)
 {
-	p->s[0] = 0;
-	p->s[1] = 0;
-	p->s[2] = 1;
-	p->s[3] = -z;
+	p->normal.s[0] = 0;
+	p->normal.s[1] = 0;
+	p->normal.s[2] = 1;
+	p->d = -z;
 }
 
 void plane_ceiling(struct plane* p, float z)
 {
-	p->s[0] = 0;
-	p->s[1] = 0;
-	p->s[2] = -1;
-	p->s[3] = z;
+	p->normal.s[0] = 0;
+	p->normal.s[1] = 0;
+	p->normal.s[2] = -1;
+	p->d = z;
 }
 
 void vec2_addi(struct vec2* target, struct vec2* src)
@@ -41,8 +47,17 @@ float plane_z(struct plane* p, struct vec2* v)
 {
 	// ax + by + cz + d = 0
 	// so, z = -(ax + by + d) / c
-	return -((p->s[0]*v->s[0] + p->s[1]*v->s[1] + p->s[3]) / p->s[2]);
+	return -((p->normal.s[0]*v->s[0] + p->normal.s[1]*v->s[1] + p->d) / p->normal.s[2]);
 }
+
+#if 0
+int plane_plane_intersection(struct vec3* o, struct vec3* r, struct plane* a, struct plane* b)
+{
+	vec3_cross(r, &a->normal, &b->normal);
+	// TODO
+	return 0;
+}
+#endif
 
 float vec2_dot(struct vec2* a, struct vec2* b)
 {
@@ -107,7 +122,15 @@ void vec2_add_scalei(struct vec2* dst, struct vec2* src, float scalar)
 	}
 }
 
-void vec3_to_vec2(struct vec3* v3, struct vec2* v2)
+void vec3_from_vec2(struct vec3* v3, struct vec2* v2)
+{
+	for (int i = 0; i < 2; i++) {
+		v3->s[i] = v2->s[i];
+	}
+	v3->s[2] = 0;
+}
+
+void vec2_from_vec3(struct vec2* v2, struct vec3* v3)
 {
 	for (int i = 0; i < 2; i++) {
 		v2->s[i] = v3->s[i];
@@ -172,10 +195,12 @@ void vec3_add_scalei(struct vec3* dst, struct vec3* src, float scalar)
 
 void vec3_normalize(struct vec3* x)
 {
-	float r = sqrtf(vec3_dot(x, x));
-	for (int i = 0; i < 3; i++) {
-		x->s[i] /= r;
-	}
+	vec3_scalei(x, 1 / sqrtf(vec3_dot(x, x)));
+}
+
+void vec3_normalized(struct vec3* dst, struct vec3* src)
+{
+	vec3_scale(dst, src, 1 / sqrtf(vec3_dot(src, src)));
 }
 
 void vec3_set(struct vec3* v, float r, float g, float b)
@@ -184,6 +209,15 @@ void vec3_set(struct vec3* v, float r, float g, float b)
 	v->s[1] = g;
 	v->s[2] = b;
 }
+
+#if 0
+void vec3_extract(struct vec3* v, float* r, float* g, float* b)
+{
+	if (r != NULL) *r = v->s[0];
+	if (g != NULL) *g = v->s[1];
+	if (b != NULL) *b = v->s[2];
+}
+#endif
 
 void vec3_set8(struct vec3* v, int r, int g, int b)
 {
@@ -223,6 +257,7 @@ void vec2_rgbize(struct vec3* rgb, struct vec2* v)
 	}
 }
 
+#if 0
 void plane_normal(struct vec3* normal, struct plane* plane)
 {
 	for (int i = 0; i < 3; i++) {
@@ -230,11 +265,17 @@ void plane_normal(struct vec3* normal, struct plane* plane)
 	}
 }
 
+void plane_set_normal(struct plane* plane, struct vec3* normal)
+{
+	for (int i = 0; i < 3; i++) {
+		plane->s[i] = normal->s[i];
+	}
+}
+#endif
+
 float ray_plane_intersection(struct vec3* position, struct vec3* origin, struct vec3* ray, struct plane* plane)
 {
-	struct vec3 normal;
-	plane_normal(&normal, plane);
-	float t = -(vec3_dot(&normal, origin) + plane->s[3]) / vec3_dot(&normal, ray);
+	float t = -(vec3_dot(&plane->normal, origin) + plane->d) / vec3_dot(&plane->normal, ray);
 	if (t > 0) {
 		vec3_scale(position, ray, t);
 		vec3_addi(position, origin);
@@ -277,11 +318,16 @@ void vec3_rgb2unicorns(struct vec3* v)
 	v->s[2] = 200.0 * (labfn(y/yn) - labfn(z/zn));
 }
 
-static float mat33_at(struct mat33* m, int i, int j)
+static float* mat33_atp(struct mat33* m, int i, int j)
 {
 	ASSERT(i >= 0 && i < 3);
 	ASSERT(j >= 0 && j < 3);
-	return m->s[i*3+j];
+	return &m->s[i*3+j];
+}
+
+static float mat33_at(struct mat33* m, int i, int j)
+{
+	return *(mat33_atp(m, i, j));
 }
 
 static void mat33_row(struct mat33* m, struct vec3* row, int i)
@@ -292,7 +338,6 @@ static void mat33_row(struct mat33* m, struct vec3* row, int i)
 	}
 }
 
-#if 0
 static void mat33_col(struct mat33* m, struct vec3* col, int j)
 {
 	ASSERT(j >= 0 && j < 3);
@@ -300,7 +345,7 @@ static void mat33_col(struct mat33* m, struct vec3* col, int j)
 		col->s[x] = mat33_at(m, x, j);
 	}
 }
-#endif
+
 
 void mat33_apply(struct mat33* m, struct vec3* dst, struct vec3* src)
 {
@@ -316,6 +361,48 @@ void mat33_applyi(struct mat33* m, struct vec3* v)
 	struct vec3 dst;
 	mat33_apply(m, &dst, v);
 	vec3_copy(v, &dst);
+}
+
+void mat33_mul(struct mat33* dst, struct mat33* a, struct mat33* b)
+{
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++) {
+			struct vec3 row;
+			mat33_row(a, &row, i);
+
+			struct vec3 col;
+			mat33_col(b, &col, j);
+
+			*(mat33_atp(dst, i, j)) = vec3_dot(&row, &col);
+		}
+	}
+}
+
+
+void mat33_set_rotation(struct mat33* m, float angle, struct vec3* axis)
+{
+	struct vec3 v;
+	vec3_normalized(&v, axis);
+
+	float phi = DEG2RAD(angle);
+	float c = cosf(phi);
+	float s = sinf(phi);
+
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++) {
+			float* e = mat33_atp(m, i, j);
+			*e = v.s[i] * v.s[j] * (1-c);
+			if (i == j) {
+				*e += c;
+			} else {
+				int k = 3-i-j;
+				ASSERT(k >= 0 && k < 3);
+				float sgn0 = (i-j)&1 ? 1 : -1;
+				float sgn1 = (i-j)>0 ? 1 : -1;
+				*e += v.s[k] * s * sgn0 * sgn1;
+			}
+		}
+	}
 }
 
 void mat23_identity(struct mat23* m)

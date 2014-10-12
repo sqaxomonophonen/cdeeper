@@ -472,7 +472,7 @@ static void entclip_sector_contour(struct clip_result* result, struct lvl* lvl, 
 				// intersection compensated for entity height..
 				// and radius? XXX currently assuming non-sloped planes
 
-				float headroom = fabs(sector->flat[0].plane.s[3] + sector->flat[1].plane.s[3]);
+				float headroom = fabs(sector->flat[0].plane.d + sector->flat[1].plane.d);
 				if (headroom < MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT) impassable = 1;
 			}
 		}
@@ -563,7 +563,7 @@ int lvl_trace(
 	struct vec2 origin2;
 
 	struct vec2 ray2;
-	vec3_to_vec2(ray, &ray2);
+	vec2_from_vec3(&ray2, ray);
 
 	result->sector = sector;
 
@@ -597,7 +597,7 @@ int lvl_trace(
 			float rxs = vec2_cross(&ray2, &vd);
 			if (rxs == 0) continue;
 			struct vec2 qp;
-			vec3_to_vec2(&origin, &origin2);
+			vec2_from_vec3(&origin2, &origin);
 			vec2_sub(&qp, v0, &origin2);
 			float t = vec2_cross(&qp, &vd) / rxs;
 			if (t < 0) continue;
@@ -654,7 +654,8 @@ int lvl_trace(
 		uint32_t oppositei = lvl_get_sidedef(lvl, ld->sidedef[(nc->usr&1)^1])->sector;
 		struct lvl_sector* opposite = lvl_get_sector(lvl, oppositei);
 		struct vec2 hit;
-		vec3_to_vec2(&result->position, &hit);
+		vec2_from_vec3(&hit, &result->position);
+
 		float pz = result->position.s[2];
 		float z0 = plane_z(&opposite->flat[0].plane, &hit);
 		float z1 = plane_z(&opposite->flat[1].plane, &hit);
@@ -675,12 +676,11 @@ int lvl_trace(
 	return 0;
 }
 
-void lvl_tag_clear_highlights(struct lvl* lvl)
+static void lvl_tag_apply_mask(struct lvl* lvl, int32_t mask)
 {
-	int highlighted = LVL_HIGHLIGHTED_ZPLUS | LVL_HIGHLIGHTED_ZMINUS;
 	for (int i = 0; i < lvl->n_sectors; i++) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, i);
-		sector->usr &= ~highlighted;
+		sector->usr &= mask;
 		for (int j = 0; j < sector->contourn; j++) {
 			int32_t ci = sector->contour0 + j;
 			struct lvl_contour* c = lvl_get_contour(lvl, ci);
@@ -688,9 +688,19 @@ void lvl_tag_clear_highlights(struct lvl* lvl)
 			uint32_t sdi = ld->sidedef[c->usr&1];
 			ASSERT(sdi != -1);
 			struct lvl_sidedef* sd = lvl_get_sidedef(lvl, sdi);
-			sd->usr &= ~highlighted;
+			sd->usr &= mask;
 		}
 	}
+}
+
+void lvl_tag_clear_highlights(struct lvl* lvl)
+{
+	lvl_tag_apply_mask(lvl, ~(LVL_HIGHLIGHTED_ZPLUS | LVL_HIGHLIGHTED_ZMINUS));
+}
+
+void lvl_tag_clear_all(struct lvl* lvl)
+{
+	lvl_tag_apply_mask(lvl, ~(LVL_HIGHLIGHTED_ZPLUS | LVL_HIGHLIGHTED_ZMINUS | LVL_SELECTED_ZMINUS | LVL_SELECTED_ZPLUS));
 }
 
 void lvl_tag_flats(struct lvl* lvl, struct lvl_trace_result* trace, int clicked)

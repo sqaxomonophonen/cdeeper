@@ -129,6 +129,7 @@ int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p);
 int32_t lvl_sector_find(struct lvl* lvl, struct vec2* p);
 
 void lvl_tag_clear_highlights(struct lvl* lvl);
+void lvl_tag_clear_all(struct lvl* lvl);
 void lvl_tag_flats(struct lvl* lvl, struct lvl_trace_result* trace, int clicked);
 void lvl_tag_sectors(struct lvl* lvl, struct lvl_trace_result* trace, int clicked);
 void lvl_tag_sidedefs(struct lvl* lvl, struct lvl_trace_result* trace, int clicked);

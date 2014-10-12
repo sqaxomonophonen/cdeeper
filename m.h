@@ -34,7 +34,9 @@ void vec3_cross(struct vec3* dst, struct vec3* a, struct vec3* b);
 void vec3_copy(struct vec3* dst, struct vec3* src);
 void vec3_add_scalei(struct vec3* dst, struct vec3* src, float scalar);
 void vec3_normalize(struct vec3* x);
+void vec3_normalized(struct vec3* dst, struct vec3* src);
 void vec3_set(struct vec3* v, float r, float g, float b);
+void vec3_extract(struct vec3* v, float* r, float* g, float* b);
 void vec3_set8(struct vec3* v, int r, int g, int b);
 void vec3_lerp(struct vec3* dst, struct vec3* a, struct vec3* b, float t);
 
@@ -42,8 +44,8 @@ void vec3_lerp(struct vec3* dst, struct vec3* a, struct vec3* b, float t);
  * euclidean distances */
 void vec3_rgb2unicorns(struct vec3* v);
 
-
-void vec3_to_vec2(struct vec3* v3, struct vec2* v2);
+void vec3_from_vec2(struct vec3* v3, struct vec2* v2);
+void vec2_from_vec3(struct vec2* v2, struct vec3* v3);
 
 void vec2_rgbize(struct vec3* rgb, struct vec2* v);
 
@@ -53,6 +55,8 @@ struct mat33 {
 
 void mat33_apply(struct mat33* m, struct vec3* dst, struct vec3* src);
 void mat33_applyi(struct mat33* m, struct vec3* v);
+void mat33_mul(struct mat33* dst, struct mat33* a, struct mat33* b);
+void mat33_set_rotation(struct mat33* m, float angle, struct vec3* axis);
 
 struct mat23 {
 	float s[6];
@@ -64,14 +68,19 @@ void mat23_identity(struct mat23* m);
 void mat23_translate(struct mat23* m, struct vec2* t);
 
 struct plane {
-	float s[4];
+	struct vec3 normal;
+	float d;
 };
 
-void plane_normal(struct vec3* normal, struct plane* plane);
-
+void plane_translate(struct plane* p, struct vec3* translation);
 void plane_floor(struct plane* p, float z);
 void plane_ceiling(struct plane* p, float z);
 float plane_z(struct plane* p, struct vec2* v);
+#if 0
+// plane-plane intersection; result is o+ri, 0 returned if planes don't
+// intersect
+int plane_plane_intersection(struct vec3* o, struct vec3* r, struct plane* a, struct plane* b);
+#endif
 
 
 
