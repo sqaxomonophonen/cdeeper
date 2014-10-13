@@ -85,6 +85,11 @@ int main(int argc, char** argv)
 	int ctrl_zoom_in = 0;
 	int ctrl_zoom_out = 0;
 
+	int ctrl_arrow_left = 0;
+	int ctrl_arrow_right = 0;
+	int ctrl_arrow_up = 0;
+	int ctrl_arrow_down = 0;
+
 	int overhead_mode = 0;
 	float overhead_scale = 0.2f;
 
@@ -135,6 +140,11 @@ int main(int argc, char** argv)
 				if (e.key.keysym.sym == SDLK_w) ctrl_forward = 1;
 				if (e.key.keysym.sym == SDLK_s) ctrl_backward = 1;
 
+				if (e.key.keysym.sym == SDLK_UP) ctrl_arrow_up = 1;
+				if (e.key.keysym.sym == SDLK_DOWN) ctrl_arrow_down = 1;
+				if (e.key.keysym.sym == SDLK_LEFT) ctrl_arrow_left = 1;
+				if (e.key.keysym.sym == SDLK_RIGHT) ctrl_arrow_right = 1;
+
 				if (e.key.keysym.sym == SDLK_KP_PLUS) ctrl_zoom_in = 1;
 				if (e.key.keysym.sym == SDLK_KP_MINUS) ctrl_zoom_out = 1;
 
@@ -170,6 +180,11 @@ int main(int argc, char** argv)
 				if (e.key.keysym.sym == SDLK_d) ctrl_strafe_right = 0;
 				if (e.key.keysym.sym == SDLK_w) ctrl_forward = 0;
 				if (e.key.keysym.sym == SDLK_s) ctrl_backward = 0;
+
+				if (e.key.keysym.sym == SDLK_UP) ctrl_arrow_up = 0;
+				if (e.key.keysym.sym == SDLK_DOWN) ctrl_arrow_down = 0;
+				if (e.key.keysym.sym == SDLK_LEFT) ctrl_arrow_left = 0;
+				if (e.key.keysym.sym == SDLK_RIGHT) ctrl_arrow_right = 0;
 
 				if (e.key.keysym.sym == SDLK_KP_PLUS) ctrl_zoom_in = 0;
 				if (e.key.keysym.sym == SDLK_KP_MINUS) ctrl_zoom_out = 0;
@@ -208,6 +223,19 @@ int main(int argc, char** argv)
 				tool_dy += e.wheel.y;
 				vec3_copy(&clicked_position, &trace_result.position);
 			}
+		}
+
+		if (ctrl_arrow_up) {
+			tool_dy = 0.1;
+		}
+		if (ctrl_arrow_down) {
+			tool_dy = -0.1;
+		}
+		if (ctrl_arrow_left) {
+			tool_dx = 0.1;
+		}
+		if (ctrl_arrow_right) {
+			tool_dx = -0.1;
 		}
 
 		if (overhead_mode) {
