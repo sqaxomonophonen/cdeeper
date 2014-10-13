@@ -125,7 +125,7 @@ int lvl_trace(
 	struct vec3* ray,
 	struct lvl_trace_result* result);
 
-int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p);
+//int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p);
 int32_t lvl_sector_find(struct lvl* lvl, struct vec2* p);
 
 void lvl_tag_clear_highlights(struct lvl* lvl);

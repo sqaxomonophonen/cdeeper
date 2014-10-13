@@ -289,17 +289,9 @@ void lvl_build_contours(struct lvl* lvl)
 	}
 }
 
-int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
+static int lvl_sector_inside_dir(struct lvl* lvl, int32_t sectori, struct vec2* p, struct vec2* dir)
 {
-	// XXX FIXME numerical instability can and will fuck this up ..
-	// alternatives? just-in-time BSP? majority vote of 5 random rays?
-	// woop?
-
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
-
-	struct vec2 dir;
-	dir.s[0] = 0;
-	dir.s[1] = 1;
 
 	int intersections = 0;
 
@@ -314,7 +306,7 @@ int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
 		struct vec2 vd;
 		vec2_sub(&vd, v1, v0);
 
-		float rxs = vec2_cross(&dir, &vd);
+		float rxs = vec2_cross(dir, &vd);
 		if (rxs == 0) continue;
 		float rxs1 = 1.0f / rxs;
 
@@ -325,15 +317,41 @@ int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
 
 		if (t < 0) continue;
 
-		float u = vec2_cross(&qp, &dir) * rxs1;
+		float u = vec2_cross(&qp, dir) * rxs1;
 
-		if (u < 0.0f || u > 1.0f) continue;
+		if (u < 0.0f || u >= 1.0f) continue;
 
 		intersections++;
 	}
 
 	return intersections & 1;
 }
+
+static int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
+{
+	// XXX UGLY SOLUTION
+
+	struct vec2 dir[5] = {
+		{{-0.8179308412881762, -0.5753165553585404}},
+		{{-0.9148609542411996, -0.4037690359659612}},
+		{{0.9644500820906716, 0.2642650925780714}},
+		{{0.7459636268017298, 0.6659866871708544}},
+		{{0.989838749195648, -0.14219441125021393}}
+	};
+	int score = 0;
+	for (int i = 0; i < 5; i++) {
+		if (lvl_sector_inside_dir(lvl, sectori, p, &dir[i])) {
+			score++;
+		} else {
+			score--;
+		}
+		if (score > 2) return 1;
+		if (score < -2) return 0;
+	}
+	return 0;
+}
+
+
 
 int32_t lvl_sector_find(struct lvl* lvl, struct vec2* p)
 {
