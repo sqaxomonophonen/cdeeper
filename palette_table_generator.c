@@ -25,7 +25,9 @@ int main(int argc, char** argv)
 		for (int c0 = 0; c0 < 256; c0++) {
 			struct vec3 target;
 			vec3_set8(&target, palette[c0*3], palette[c0*3+1], palette[c0*3+2]);
-			vec3_scalei(&target, (float)lvl/(float)MAGIC_NUM_LIGHT_LEVELS);
+			if (c0 < (256-16)) {
+				vec3_scalei(&target, (float)lvl/(float)MAGIC_NUM_LIGHT_LEVELS);
+			}
 			if (unicorns) vec3_rgb2unicorns(&target);
 			int best_match = -1;
 			float best_distance = 0;

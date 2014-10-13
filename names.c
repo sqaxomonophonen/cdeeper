@@ -3,7 +3,7 @@
 #include "names.h"
 #include "a.h"
 
-const char* names_flats[] = { "flat0", "flat1", NULL };
+const char* names_flats[] = { "flat0", "flat1", "glowflat", NULL };
 
 int names_number_of_flats()
 {

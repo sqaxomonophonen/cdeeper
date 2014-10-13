@@ -15,7 +15,7 @@ palette_table_generator: palette_table_generator.o mud.o a.o m.o
 
 dgfx/palette_table.png: palette_table_generator Makefile
 	mkdir -p dgfx
-	./palette_table_generator gfx/flat0.png | gm convert -size 256x16 -depth 8 rgb:- dgfx/palette_table.png
+	./palette_table_generator gfx/ref.png | gm convert -size 256x16 -depth 8 rgb:- dgfx/palette_table.png
 
 entities2lua.o: entities2lua.c entities.inc.h
 	$(CC) $(CFLAGS) -c entities2lua.c
