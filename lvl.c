@@ -348,7 +348,7 @@ static int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
 		if (score > 2) return 1;
 		if (score < -2) return 0;
 	}
-	return 0;
+	return score > 0;
 }
 
 
