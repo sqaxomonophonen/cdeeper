@@ -101,16 +101,22 @@ return function (plan_id)
 					local portal = pick_portal(target, t)
 					local ld = target.linedefs[portal]
 					local s = 0
-					if ld.sidedef[2] then s=1 end
+					local z0 = nil
+					if ld.sidedef[2] then
+						s=1
+						z0 = target.sectors[target.sidedefs[ld.sidedef[2]].sector].flat[1].z
+					else
+						z0 = target.sectors[target.sidedefs[ld.sidedef[1]].sector].flat[1].z
+					end
 					local i0 = (side+s)%2
 					local i1 = (side+s+1)%2
 					local v0i = ld.vertex[i0+1]
 					local v1i = ld.vertex[i1+1]
-					return v0i, v1i, portal
+					return v0i, v1i, portal, z0
 				end
 
-				local sv0i, sv1i, sportal = pick(self, 0)
-				local bv0i, bv1i, bportal = pick(brick, 1)
+				local sv0i, sv1i, sportal, sz0 = pick(self, 0)
+				local bv0i, bv1i, bportal, bz0 = pick(brick, 1)
 
 				local sv0 = self.vertices[sv0i]
 				local sv1 = self.vertices[sv1i]
@@ -118,8 +124,7 @@ return function (plan_id)
 				local bv1 = brick.vertices[bv1i]
 
 				local tx = mat33.homogeneous_map33(bv0, bv1, sv0, sv1)
-				local dz = 0
-				-- TODO z-transform? just line sv0i up with bv1i?
+				local dz = sz0 - bz0
 
 				local sidedef_offset = #self.sidedefs
 				local sector_offset = #self.sectors
