@@ -13,7 +13,7 @@
 #define LVL_CONTOUR_IS_LAST(c) (c->usr & 4)
 
 struct lvl_flat {
-	struct plane plane; // local to vertex 0
+	float z;
 	int32_t texture;
 	struct mat23 tx;
 };

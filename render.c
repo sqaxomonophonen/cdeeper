@@ -425,6 +425,17 @@ static void render_init_buffers(struct render* render)
 	size_t wall_index_data_sz = RENDER_BUFSZ * sizeof(uint32_t);
 	render->type0_index_data = malloc(wall_index_data_sz);
 	AN(render->type0_index_data);
+	int i = 0;
+	int offset = 0;
+	while (i < (RENDER_BUFSZ-6)) {
+		render->type0_index_data[i++] = offset + 0;
+		render->type0_index_data[i++] = offset + 1;
+		render->type0_index_data[i++] = offset + 2;
+		render->type0_index_data[i++] = offset + 0;
+		render->type0_index_data[i++] = offset + 2;
+		render->type0_index_data[i++] = offset + 3;
+		offset += 4;
+	}
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, wall_index_data_sz, render->type0_index_data, GL_STREAM_DRAW); CHKGL;
 
 	// step buffers
@@ -597,18 +608,16 @@ static void yield_flat_partial(struct render* render, struct lvl* lvl, int secto
 	int nverts = tessGetVertexCount(t);
 	const float* verts = tessGetVertices(t);
 	for (int i = 0; i < nverts; i++) {
-		struct plane* plane = &flat->plane;
 		struct vec2 v;
 		v.s[0] = verts[i*2];
 		v.s[1] = verts[i*2+1];
-		float z = plane_z(plane, &v);
 		struct vec2 uv;
 		vec2_copy(&uv, &v);
 		mat23_applyi(&flat->tx, &uv);
 		AN(render->add_flat_vertex);
 		render->add_flat_vertex(
 			render,
-			v.s[0], z, v.s[1], // XYZ
+			v.s[0], flat->z, v.s[1], // XYZ
 			uv.s[0], uv.s[1]
 		);
 	}
@@ -639,31 +648,9 @@ static void yield_flats(struct render* render, struct lvl* lvl)
 		yield_flat_partial(render, lvl, i, 0);
 		yield_flat_partial(render, lvl, i, 1);
 	}
-
 }
 
-static void add_type0_triangle_indices(struct render* render)
-{
-	int top = render->type0_vertex_n;
-	ASSERT((render->type0_index_n+3) < RENDER_BUFSZ);
-	render->type0_index_data[render->type0_index_n++] = top + 0;
-	render->type0_index_data[render->type0_index_n++] = top + 1;
-	render->type0_index_data[render->type0_index_n++] = top + 2;
-}
-
-static void add_type0_quad_indicies(struct render* render)
-{
-	int top = render->type0_vertex_n;
-	ASSERT((render->type0_index_n+6) < RENDER_BUFSZ);
-	render->type0_index_data[render->type0_index_n++] = top + 0;
-	render->type0_index_data[render->type0_index_n++] = top + 1;
-	render->type0_index_data[render->type0_index_n++] = top + 2;
-	render->type0_index_data[render->type0_index_n++] = top + 0;
-	render->type0_index_data[render->type0_index_n++] = top + 2;
-	render->type0_index_data[render->type0_index_n++] = top + 3;
-}
-
-static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz, int nvertices)
+static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 	render->current_light_level = sector->light_level;
@@ -680,19 +667,9 @@ static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sec
 	} else {
 		render->wall_enable = 0;
 	}
+
 	if (texture > render->wall_current_texture && (render->wall_next_texture == -1 || texture < render->wall_next_texture)) {
 		render->wall_next_texture = texture;
-	}
-
-	switch (nvertices) {
-		case 3:
-			add_type0_triangle_indices(render);
-			break;
-		case 4:
-			add_type0_quad_indicies(render);
-			break;
-		default:
-			arghf("nvertices not 3 nor 4");
 	}
 }
 
@@ -750,93 +727,44 @@ static void yield_walls(struct render* render, struct lvl* lvl)
 				float u0 = 0;
 				float u1 = vd_length;
 
-				float z0,z1,z2,z3;
-
-				int crossing = 0;
-				float t = 0;
+				float z0,z1;
 
 				if (zd == 0) {
-					z0 = plane_z(&sector->flat[1].plane, v0);
-					z1 = plane_z(&sector->flat[1].plane, v1);
-					z2 = plane_z(&sector->flat[0].plane, v1);
-					z3 = plane_z(&sector->flat[0].plane, v0);
+					z0 = sector->flat[0].z;
+					z1 = sector->flat[1].z;
 				} else {
 					struct lvl_sector* sector1 = lvl_get_sector(lvl, sopp->sector);
 					if (zd == -1) {
-						z0 = plane_z(&sector1->flat[0].plane, v0);
-						z1 = plane_z(&sector1->flat[0].plane, v1);
-						z2 = plane_z(&sector->flat[0].plane, v1);
-						z3 = plane_z(&sector->flat[0].plane, v0);
-						if (z1 < z2 && z0 < z3) continue;
-						if (z1 < z2 || z0 < z3) {
-							//(z0-z3) + ((z1-z2) - (z0-z3)) * t = 0
-							t = (z3-z0) / ((z1-z2) - (z0-z3));
-							if (z1 < z2) {
-								crossing = 1; // v0->vmid
-							} else {
-								crossing = 2; // v1->vmid
-							}
-						}
+						z0 = sector->flat[0].z;
+						z1 = sector1->flat[0].z;
+						if (z1 < z0) continue;
 					} else if (zd == 1) {
-						z0 = plane_z(&sector->flat[1].plane, v0);
-						z1 = plane_z(&sector->flat[1].plane, v1);
-						z2 = plane_z(&sector1->flat[1].plane, v1);
-						z3 = plane_z(&sector1->flat[1].plane, v0);
-						if (z2 > z1 && z3 > z0) continue;
-						if (z2 > z1 || z3 > z0) {
-							//(z0-z3) + ((z1-z2) - (z0-z3)) * t = 0
-							t = (z3-z0) / ((z1-z2) - (z0-z3));
-							if (z2 > z1) {
-								crossing = 1; // v0->vmid
-							} else {
-								crossing = 2; // v1->vmid
-							}
-						}
+						z0 = sector1->flat[1].z;
+						z1 = sector->flat[1].z;
+						if (z0 > z1) continue;
 					} else {
 						AZ(1);
 					}
 				}
 
 				struct vec2 uv[4] = {
-					{{u0, z0}},
+					{{u0, z1}},
 					{{u1, z1}},
-					{{u1, z2}},
-					{{u0, z3}}
+					{{u1, z0}},
+					{{u0, z0}}
 				};
 
 				struct mat23* tx = &sd->tx[zd <= 0 ? 0 : 1];
-				for (int uvi = 0; uvi < 5; uvi++) {
+				for (int uvi = 0; uvi < 4; uvi++) {
 					mat23_applyi(tx, &uv[uvi]);
 				}
 
-				if (crossing) {
-					struct vec2 vmid;
-					vec2_lerp(&vmid, v0, v1, t);
-
-					float zmid = z0 + (z1-z0) * t;
-
-					struct vec2 uvmid;
-					vec2_lerp(&uvmid, &uv[0], &uv[1], t);
-					mat23_applyi(tx, &uvmid);
-
-					render->begin_wall(render, lvl, sectori, ci, zd, 3);
-					if (crossing == 1) {
-						render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], uv[3].s[0], uv[3].s[1]);
-						render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], uv[0].s[0], uv[0].s[1]);
-					} else {
-						render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], uv[1].s[0], uv[1].s[1]);
-						render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], uv[2].s[0], uv[2].s[1]);
-					}
-					render->add_wall_vertex(render, vmid.s[0], zmid, vmid.s[1], uvmid.s[0], uvmid.s[1]);
-					if (render->end_wall) render->end_wall(render);
-				} else {
-					render->begin_wall(render, lvl, sectori, ci, zd, 4);
-					render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], uv[0].s[0], uv[0].s[1]);
-					render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], uv[1].s[0], uv[1].s[1]);
-					render->add_wall_vertex(render, v1->s[0], z2, v1->s[1], uv[2].s[0], uv[2].s[1]);
-					render->add_wall_vertex(render, v0->s[0], z3, v0->s[1], uv[3].s[0], uv[3].s[1]);
-					if (render->end_wall) render->end_wall(render);
-				}
+				render->begin_wall(render, lvl, sectori, ci, zd);
+				render->add_wall_vertex(render, v0->s[0], z1, v0->s[1], uv[0].s[0], uv[0].s[1]);
+				render->add_wall_vertex(render, v1->s[0], z1, v1->s[1], uv[1].s[0], uv[1].s[1]);
+				render->add_wall_vertex(render, v1->s[0], z0, v1->s[1], uv[2].s[0], uv[2].s[1]);
+				render->add_wall_vertex(render, v0->s[0], z0, v0->s[1], uv[3].s[0], uv[3].s[1]);
+				if (render->end_wall) render->end_wall(render);
 			}
 		}
 	}
@@ -883,8 +811,7 @@ static void wall_callbacks(
 		struct lvl* lvl,
 		int sectori,
 		int contouri,
-		int dz,
-		int nvertices
+		int dz
 	),
 	void (*add_wall_vertex)(
 		struct render* render,
@@ -916,8 +843,7 @@ static void flush_type0_data(struct render* render)
 	glVertexAttribPointer(render->type0_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->type0_index_buffer); CHKGL;
-	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, render->type0_index_n * sizeof(uint32_t), render->type0_index_data); CHKGL;
-	glDrawElements(GL_TRIANGLES, render->type0_index_n, GL_UNSIGNED_INT, NULL); CHKGL;
+	glDrawElements(GL_TRIANGLES, render->type0_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
 }
 
 
@@ -938,9 +864,9 @@ static void render_walls(struct render* render, struct lvl* lvl)
 
 	do {
 		render->type0_vertex_n = 0;
-		render->type0_index_n = 0;
 		render->wall_current_texture = render->wall_next_texture;
 		render->wall_next_texture = -1;
+
 		yield_walls(render, lvl);
 
 		if (render->wall_current_texture == -1) continue;
@@ -1143,7 +1069,6 @@ static void render_lvl_entities(struct render* render, struct lvl* lvl)
 	// (FIXME maybe sprites ought to be atlas based?)
 	do {
 		render->type0_vertex_n = 0;
-		render->type0_index_n = 0;
 		current_texture = next_texture;
 		next_texture = -1;
 		for (int i = 0; i < lvl->n_entities; i++) {
@@ -1174,8 +1099,6 @@ static void render_lvl_entities(struct render* render, struct lvl* lvl)
 				struct vec2 p1;
 				vec2_copy(&p1, p);
 				vec2_add_scalei(&p1, &ivn, 1.0);
-
-				add_type0_quad_indicies(render);
 
 				render_add_type0_vertex(
 					render,
@@ -1317,7 +1240,7 @@ static void tagsctx_end_flat(struct render* render)
 	glEnd();
 }
 
-static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz, int nvertices)
+static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz)
 {
 	struct lvl_contour* c = lvl_get_contour(lvl, contouri);
 	struct lvl_linedef* ld = lvl_get_linedef(lvl, c->linedef);
@@ -1327,16 +1250,7 @@ static void tagsctx_begin_wall(struct render* render, struct lvl* lvl, int secto
 	int selected = (dz <= 0 && (sd->usr & LVL_SELECTED_ZMINUS)) || (dz >= 0 && (sd->usr & LVL_SELECTED_ZPLUS));
 
 	tagsctx_gl_color(hover, selected);
-	switch (nvertices) {
-		case 3:
-			glBegin(GL_TRIANGLES);
-			break;
-		case 4:
-			glBegin(GL_QUADS);
-			break;
-		default:
-			arghf("nvertices not 3 nor 4");
-	}
+	glBegin(GL_QUADS);
 }
 
 static void tagsctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)

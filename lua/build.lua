@@ -1,7 +1,6 @@
 local vec2 = require('vec2')
 local mat33 = require('mat33')
 local mat44 = require('mat44')
-local plane = require('plane')
 
 function shuffle(list)
 	local copy = {}
@@ -119,7 +118,7 @@ return function (plan_id)
 				local bv1 = brick.vertices[bv1i]
 
 				local tx = mat33.homogeneous_map33(bv0, bv1, sv0, sv1)
-				local tx4 = mat44.from_homogeneous_mat33(tx)
+				local dz = 0
 				-- TODO z-transform? just line sv0i up with bv1i?
 
 				local sidedef_offset = #self.sidedefs
@@ -166,7 +165,7 @@ return function (plan_id)
 					-- TODO texture transform
 					for flati=1,2 do
 						local flat = sector.flat[flati]
-						flat.plane = flat.plane:transform(tx4)
+						flat.z = flat.z + dz
 					end
 					table.insert(self.sectors, sector)
 				end
@@ -185,13 +184,6 @@ return function (plan_id)
 
 		-- bless vertices
 		for i = 1,#brick.vertices do brick.vertices[i] = vec2(brick.vertices[i]) end
-
-		-- bless planes
-		for i = 1,#brick.sectors do
-			for j = 1,2 do
-				brick.sectors[i].flat[j].plane = plane(brick.sectors[i].flat[j].plane)
-			end
-		end
 
 		lvl:insert_brick(brick)
 

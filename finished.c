@@ -97,8 +97,6 @@ int main(int argc, char** argv)
 	enum {
 		ED_NONE = 1,
 		ED_FLAT_Z,
-		//ED_FLAT_SLOPEFIT,
-		ED_FLAT_SLOPE,
 		ED_FLAT_TEXTURE,
 		ED_FLAT_TEXTURE_TRANSLATE,
 		ED_SIDEDEF_TEXTURE,
@@ -150,22 +148,16 @@ int main(int argc, char** argv)
 					case SDLK_2:
 						ed = ED_FLAT_Z;
 						break;
-					//case SDLK_3:
-						//ed = ED_FLAT_SLOPEFIT;
-						//break;
-					case SDLK_4:
-						ed = ED_FLAT_SLOPE;
-						break;
-					case SDLK_5:
+					case SDLK_3:
 						ed = ED_FLAT_TEXTURE;
 						break;
-					case SDLK_6:
+					case SDLK_4:
 						ed = ED_FLAT_TEXTURE_TRANSLATE;
 						break;
-					case SDLK_7:
+					case SDLK_5:
 						ed = ED_SIDEDEF_TEXTURE;
 						break;
-					case SDLK_8:
+					case SDLK_6:
 						ed = ED_SIDEDEF_TEXTURE_TRANSLATE;
 						break;
 				}
@@ -263,7 +255,6 @@ int main(int argc, char** argv)
 			lvl_entity_accelerate(&lvl, &player, &accel, dt);
 		}
 
-
 		lvl_entity_clipmove(&lvl, &player, dt);
 
 
@@ -271,46 +262,12 @@ int main(int argc, char** argv)
 			if (ed == ED_FLAT_Z) {
 				for (int i = 0; i < lvl.n_sectors; i++) {
 					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-					struct vec3 translation;
-					translation.s[0] = 0;
-					translation.s[1] = 0;
-					translation.s[2] = tool_dy * 8;
-
+					float d = tool_dy * 8;
 					if (sector->usr & LVL_SELECTED_ZMINUS) {
-						plane_translate(&sector->flat[0].plane, &translation);
+						sector->flat[0].z += d;
 					}
 					if (sector->usr & LVL_SELECTED_ZPLUS) {
-						plane_translate(&sector->flat[1].plane, &translation);
-					}
-				}
-			}
-			if (ed == ED_FLAT_SLOPE) {
-				struct mat33 tx,xrot,yrot;
-
-				struct vec3 yaxis;
-				vec3_from_vec2(&yaxis, &right);
-				mat33_set_rotation(&yrot, tool_dy, &yaxis);
-
-				struct vec3 xaxis;
-				vec3_from_vec2(&xaxis, &forward);
-				mat33_set_rotation(&xrot, -tool_dx, &xaxis);
-
-				mat33_mul(&tx, &xrot, &yrot);
-
-				for (int i = 0; i < lvl.n_sectors; i++) {
-					struct lvl_sector* sector = lvl_get_sector(&lvl, i);
-					for (int flati = 0; flati < 2; flati++) {
-						if (sector->usr & (flati == 0 ? LVL_SELECTED_ZMINUS : LVL_SELECTED_ZPLUS)) {
-							struct lvl_flat* flat = &sector->flat[flati];
-
-							struct vec3 neg;
-							vec3_scale(&neg, &clicked_position, -1);
-							plane_translate(&flat->plane, &neg);
-
-							mat33_applyi(&tx, &flat->plane.normal);
-
-							plane_translate(&flat->plane, &clicked_position);
-						}
+						sector->flat[1].z += d;
 					}
 				}
 			}
@@ -423,23 +380,13 @@ int main(int argc, char** argv)
 			struct vec3 pos;
 			struct vec3 mdir;
 			lvl_entity_mouse(&player, &pos, &mdir, render_get_fovy(&render), mouse_x, mouse_y, width, height);
-			//int sectori = lvl_sector_find(&lvl, &player.p);
-			//int sectori = player.sector;
 			lvl_trace(&lvl, player.sector, &pos, &mdir, &trace_result);
 
 			lvl_tag_clear_highlights(&lvl);
 
-			if (ed == ED_FLAT_Z || ed == ED_FLAT_SLOPE || ed == ED_FLAT_TEXTURE || ed == ED_FLAT_TEXTURE_TRANSLATE) {
+			if (ed == ED_FLAT_Z || ed == ED_FLAT_TEXTURE || ed == ED_FLAT_TEXTURE_TRANSLATE) {
 				lvl_tag_flats(&lvl, &trace_result, do_select);
 			}
-			/*
-			if (ed == ED_FLAT_SLOPEFIT) {
-				if (do_select) {
-					lvl_tag_clear_all(&lvl);
-				}
-				lvl_tag_flats(&lvl, &trace_result, do_select);
-			}
-			*/
 			if (ed == ED_SIDEDEF_TEXTURE || ed == ED_SIDEDEF_TEXTURE_TRANSLATE) {
 				lvl_tag_sidedefs(&lvl, &trace_result, do_select);
 			}
@@ -458,8 +405,6 @@ int main(int argc, char** argv)
 				"mode: %s",
 				ed == ED_NONE ? "none" :
 				ed == ED_FLAT_Z ? "flat z" :
-				//ed == ED_FLAT_SLOPEFIT ? "flat slopefit" :
-				ed == ED_FLAT_SLOPE ? "flat slope" :
 				ed == ED_FLAT_TEXTURE ? "flat texture" :
 				ed == ED_FLAT_TEXTURE_TRANSLATE ? "flat texture translate" :
 				ed == ED_SIDEDEF_TEXTURE ? "sidedef texture" :

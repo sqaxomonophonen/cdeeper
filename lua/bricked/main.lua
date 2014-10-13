@@ -349,8 +349,8 @@ end
 function insert_sector(brick)
 	local sector = {
 		flat = {
-			{plane={0,0,1,64}},
-			{plane={0,0,-1,64}}
+			{z=-64},
+			{z=64}
 		}
 	}
 	table.insert(brick.sectors, sector)

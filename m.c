@@ -3,27 +3,6 @@
 #include "m.h"
 #include "a.h"
 
-void plane_translate(struct plane* plane, struct vec3* translation)
-{
-	plane->d -= vec3_dot(&plane->normal, translation);
-}
-
-void plane_floor(struct plane* p, float z)
-{
-	p->normal.s[0] = 0;
-	p->normal.s[1] = 0;
-	p->normal.s[2] = 1;
-	p->d = -z;
-}
-
-void plane_ceiling(struct plane* p, float z)
-{
-	p->normal.s[0] = 0;
-	p->normal.s[1] = 0;
-	p->normal.s[2] = -1;
-	p->d = z;
-}
-
 void vec2_addi(struct vec2* target, struct vec2* src)
 {
 	for (int i = 0; i < 2; i++) {
@@ -42,22 +21,6 @@ float vec2_cross(struct vec2* a, struct vec2* b)
 {
 	return a->s[0]*b->s[1] - a->s[1]*b->s[0];
 }
-
-float plane_z(struct plane* p, struct vec2* v)
-{
-	// ax + by + cz + d = 0
-	// so, z = -(ax + by + d) / c
-	return -((p->normal.s[0]*v->s[0] + p->normal.s[1]*v->s[1] + p->d) / p->normal.s[2]);
-}
-
-#if 0
-int plane_plane_intersection(struct vec3* o, struct vec3* r, struct plane* a, struct plane* b)
-{
-	vec3_cross(r, &a->normal, &b->normal);
-	// TODO
-	return 0;
-}
-#endif
 
 float vec2_dot(struct vec2* a, struct vec2* b)
 {
@@ -271,25 +234,8 @@ void vec2_rgbize(struct vec3* rgb, struct vec2* v)
 	}
 }
 
-#if 0
-void plane_normal(struct vec3* normal, struct plane* plane)
-{
-	for (int i = 0; i < 3; i++) {
-		normal->s[i] = plane->s[i];
-	}
-}
-
-void plane_set_normal(struct plane* plane, struct vec3* normal)
-{
-	for (int i = 0; i < 3; i++) {
-		plane->s[i] = normal->s[i];
-	}
-}
-#endif
-
-float ray_plane_intersection(struct vec3* position, struct vec3* origin, struct vec3* ray, struct plane* plane)
-{
-	float t = -(vec3_dot(&plane->normal, origin) + plane->d) / vec3_dot(&plane->normal, ray);
+float ray_zplane_intersection(struct vec3* position, struct vec3* origin, struct vec3* ray, float z)
+{	float t = -(origin->s[2] - z) / ray->s[2];
 	if (t > 0) {
 		vec3_scale(position, ray, t);
 		vec3_addi(position, origin);
@@ -419,7 +365,7 @@ void mat33_set_rotation(struct mat33* m, float angle, struct vec3* axis)
 	}
 }
 
-void mat23_identity(struct mat23* m)
+void mat23_set_identity(struct mat23* m)
 {
 	m->s[0] = 1; m->s[1] = 0;
 	m->s[2] = 0; m->s[3] = 1;
@@ -438,3 +384,4 @@ void mat23_applyi(struct mat23* m, struct vec2* v)
 	mat23_apply(m, &dst, v);
 	vec2_copy(v, &dst);
 }
+

@@ -291,6 +291,10 @@ void lvl_build_contours(struct lvl* lvl)
 
 int lvl_sector_inside(struct lvl* lvl, int32_t sectori, struct vec2* p)
 {
+	// XXX FIXME numerical instability can and will fuck this up ..
+	// alternatives? just-in-time BSP? majority vote of 5 random rays?
+	// woop?
+
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
 
 	struct vec2 dir;
@@ -458,23 +462,16 @@ static void entclip_sector_contour(struct clip_result* result, struct lvl* lvl, 
 	if (intersects) {
 		int impassable = 0;
 
-		// TODO sector height magick
+		int soppi = l->sidedef[(c->usr&1)^1];
 
-		if (l->sidedef[0] == -1 || l->sidedef[1] == -1) {
+		if (soppi == -1) {
 			impassable = 1;
 		} else {
-			for (int side = 0; side < 2; side++) {
-				if (l->sidedef[side] == -1) continue;
-				struct lvl_sidedef* sidedef = lvl_get_sidedef(lvl, l->sidedef[side]);
-				struct lvl_sector* sector = lvl_get_sector(lvl, sidedef->sector);
+			struct lvl_sidedef* sopp = lvl_get_sidedef(lvl, soppi);
+			struct lvl_sector* sector = lvl_get_sector(lvl, sopp->sector);
 
-				// XXX FIXME calculate sloped planes
-				// intersection compensated for entity height..
-				// and radius? XXX currently assuming non-sloped planes
-
-				float headroom = fabs(sector->flat[0].plane.d + sector->flat[1].plane.d);
-				if (headroom < MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT) impassable = 1;
-			}
+			float headroom = sector->flat[1].z - sector->flat[0].z;
+			if (headroom < MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT) impassable = 1;
 		}
 
 		if (impassable) {
@@ -543,9 +540,8 @@ void lvl_entity_clipmove(struct lvl* lvl, struct lvl_entity* entity, float dt)
 	// XXX updating z here, but that's not how all entities work (or eventually any)
 	if (entity->sector != -1) {
 		struct lvl_sector* sector = lvl_get_sector(lvl, entity->sector);
-		struct plane* plane = &sector->flat[0].plane;
 		float height = MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT;
-		entity->z = plane_z(plane, &entity->position) + height;
+		entity->z = sector->flat[0].z + height;
 	}
 
 }
@@ -619,10 +615,10 @@ int lvl_trace(
 		float pt = 0.0f;
 		int z = 0;
 		if (ray->s[2] > 0) {
-			pt = ray_plane_intersection(&plane_position, &origin, ray, &sector->flat[1].plane);
+			pt = ray_zplane_intersection(&plane_position, &origin, ray, sector->flat[1].z);
 			z = 1;
 		} else if (ray->s[2] < 0) {
-			pt = ray_plane_intersection(&plane_position, &origin, ray, &sector->flat[0].plane);
+			pt = ray_zplane_intersection(&plane_position, &origin, ray, sector->flat[0].z);
 			z = -1;
 		}
 		if (z != 0 && pt > 0 && (pt < nt || n == 0)) {
@@ -653,12 +649,10 @@ int lvl_trace(
 
 		uint32_t oppositei = lvl_get_sidedef(lvl, ld->sidedef[(nc->usr&1)^1])->sector;
 		struct lvl_sector* opposite = lvl_get_sector(lvl, oppositei);
-		struct vec2 hit;
-		vec2_from_vec3(&hit, &result->position);
 
 		float pz = result->position.s[2];
-		float z0 = plane_z(&opposite->flat[0].plane, &hit);
-		float z1 = plane_z(&opposite->flat[1].plane, &hit);
+		float z0 = opposite->flat[0].z;
+		float z1 = opposite->flat[1].z;
 
 		if (pz < z0) {
 			result->z = -1;

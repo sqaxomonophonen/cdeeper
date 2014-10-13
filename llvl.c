@@ -120,18 +120,8 @@ static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 	lua_rawgeti(L, -1, index+1);
 	if (!lua_istable(L, -1)) arghf("expected flat[%d] to be a table", index+1);
 
-	lua_getfield(L, -1, "plane");
-	if (!lua_istable(L, -1)) arghf("expected [\"flat\"][%d][\"plane\"] to be a table in flat", index+1);
-	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
-	for (int i = 0; i < 4; i++) {
-		lua_rawgeti(L, -1, i+1);
-		if (i == 3) {
-			flat->plane.d = lua_tonumber(L, -1);
-		} else {
-			flat->plane.normal.s[i] = lua_tonumber(L, -1);
-		}
-		lua_pop(L, 1);
-	}
+	lua_getfield(L, -1, "z");
+	flat->z = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 
 	lua_getfield(L, -1, "texture");
@@ -144,7 +134,7 @@ static void read_flat(lua_State* L, struct lvl_sector* sector, int index)
 
 	lua_getfield(L, -1, "tx");
 	if (lua_isnil(L, -1)) {
-		mat23_identity(&flat->tx);
+		mat23_set_identity(&flat->tx);
 	} else {
 		read_tx(L, &flat->tx);
 	}
@@ -219,7 +209,7 @@ static void read_sidedefs(lua_State* L, struct lvl* lvl, const char* name)
 		lua_getfield(L, -1, "tx");
 		if (lua_isnil(L, -1)) {
 			for (int j = 0; j < 2; j++) {
-				mat23_identity(&sd->tx[j]);
+				mat23_set_identity(&sd->tx[j]);
 			}
 		} else {
 			for (int j = 0; j < 2; j++) {
@@ -376,19 +366,9 @@ static void write_flat(lua_State* L, struct lvl_sector* sector, int index)
 	if (!lua_istable(L, -1)) arghf("expected [\"flat\"] to be a table");
 	lua_rawgeti(L, -1, index+1);
 	if (!lua_istable(L, -1)) arghf("expected [\"flat\"][%d] to be a table", index+1);
-	lua_getfield(L, -1, "plane");
-	if (!lua_istable(L, -1)) arghf("expected [\"flat\"][%d][\"plane\"] to be a table in flat", index+1);
 
-	if (lua_objlen(L, -1) != 4) arghf("expected plane to have 4 elements");
-	for (int i = 0; i < 4; i++) {
-		if (i == 3) {
-			lua_pushnumber(L, flat->plane.d);
-		} else {
-			lua_pushnumber(L, flat->plane.normal.s[i]);
-		}
-		lua_rawseti(L, -2, i+1);
-	}
-	lua_pop(L, 1);
+	lua_pushnumber(L, flat->z);
+	lua_setfield(L, -2, "z");
 
 	lua_pushstring(L, names_flats[clampi(flat->texture, 0, names_number_of_flats()-1)]);
 	lua_setfield(L, -2, "texture");

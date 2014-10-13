@@ -68,27 +68,10 @@ struct mat23 {
 
 void mat23_apply(struct mat23* m, struct vec2* dst, struct vec2* src);
 void mat23_applyi(struct mat23* m, struct vec2* v);
-void mat23_identity(struct mat23* m);
-void mat23_translate(struct mat23* m, struct vec2* t);
+void mat23_set_identity(struct mat23* m);
+//void mat23_translate(struct mat23* m, struct vec2* t);
 
-struct plane {
-	struct vec3 normal;
-	float d;
-};
-
-void plane_translate(struct plane* p, struct vec3* translation);
-void plane_floor(struct plane* p, float z);
-void plane_ceiling(struct plane* p, float z);
-float plane_z(struct plane* p, struct vec2* v);
-#if 0
-// plane-plane intersection; result is o+ri, 0 returned if planes don't
-// intersect
-int plane_plane_intersection(struct vec3* o, struct vec3* r, struct plane* a, struct plane* b);
-#endif
-
-
-
-float ray_plane_intersection(struct vec3* position, struct vec3* origin, struct vec3* ray, struct plane* plane);
+float ray_zplane_intersection(struct vec3* position, struct vec3* origin, struct vec3* ray, float z);
 
 #ifndef M_PI
 #define M_PI (3.141592653589793)
