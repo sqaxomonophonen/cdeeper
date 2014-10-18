@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -260,3 +261,25 @@ void mud_load_png_rgba(const char* rel, void** data, int* widthp, int* heightp)
 }
 
 */
+
+int mud_load_msh(const char* path, struct msh* msh)
+{
+	struct stat st;
+	int fd = open(path, O_RDONLY);
+	if (fd == -1) arghf("%s: %s", path, strerror(errno));
+	int e = fstat(fd, &st);
+	if (e == -1) arghf("%s: %s", path, strerror(errno));
+
+	msh->_data = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	ASSERT(msh->_data != MAP_FAILED);
+
+	int32_t* iptr = (int32_t*)msh->_data;
+	msh->n_vertices = iptr[0];
+	msh->vertices = (float*)&iptr[1];
+
+	int offset = msh->n_vertices*5+1;
+	msh->n_indices = iptr[offset];
+	msh->indices = (int32_t*)&iptr[offset+1];
+
+	return 0;
+}

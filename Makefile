@@ -3,7 +3,7 @@ CC=clang
 CFLAGS=-Ofast -Wall -std=c99 $(shell pkg-config $(PKGS) --cflags) -Ilibtess2
 #CFLAGS=-g -O0 -Wall -std=c99 $(shell pkg-config $(PKGS) --cflags) -Ilibtess2
 LINK=$(shell pkg-config $(PKGS) --libs) -lm
-DERIVED=dgfx/palette_table.png lua/d/entities.lua
+DERIVED=dgfx/palette_table.png lua/d/entities.lua workbench/nomnom/nomnom-v2.msh
 
 all: finished game
 
@@ -16,6 +16,9 @@ palette_table_generator: palette_table_generator.o mud.o a.o m.o
 dgfx/palette_table.png: palette_table_generator Makefile
 	mkdir -p dgfx
 	./palette_table_generator gfx/ref.png | gm convert -size 256x16 -depth 8 rgb:- dgfx/palette_table.png
+
+workbench/nomnom/nomnom-v2.msh:
+	workbench/export.sh nomnom/nomnom-v2.blend
 
 entities2lua.o: entities2lua.c entities.inc.h
 	$(CC) $(CFLAGS) -c entities2lua.c
@@ -71,7 +74,7 @@ game: $(DERIVED) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m
 	$(CC) $(LINK) runtime.o names.o render.o mud.o font.o shader.o lvl.o llvl.o m.o a.o game.o libtess2/libtess2.a -o game
 
 clean:
-	rm -rf *.o finished dgfx/* lua/d/*.lua
+	rm -rf *.o finished dgfx/* lua/d/*.lua workbench/nomnom/*.msh
 
 backup:
 	tar cjf ../cdeeper.tar.bz2 .

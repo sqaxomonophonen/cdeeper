@@ -123,6 +123,10 @@ mt.dump = function (self)
 	end
 end
 
+mt.homogeneous_calculate_rotation = function (self)
+	return math.atan2(self[1], self[3]) / math.pi * 180 - 90
+end
+
 static.new = function (a)
 	return setmetatable(a, mt)
 end

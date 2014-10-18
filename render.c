@@ -229,6 +229,24 @@ static void render_init_flats(struct render* render)
 	free(atlas);
 }
 
+static void render_load_texture(struct render_texture* texture, char* path)
+{
+	uint8_t* data;
+
+	AZ(mud_load_png_paletted(path, &data, &texture->width, &texture->height));
+
+	int level = 0;
+	int border = 0;
+
+	glGenTextures(1, &texture->texture); CHKGL;
+	glBindTexture(GL_TEXTURE_2D, texture->texture); CHKGL;
+	glTexImage2D(GL_TEXTURE_2D, level, 1, texture->width, texture->height, border, GL_RED, GL_UNSIGNED_BYTE, data); CHKGL;
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); CHKGL;
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); CHKGL;
+
+	free(data);
+}
+
 static void render_load_texture_list(struct render_texture* textures, int max, const char* names[])
 {
 	static char path[1024];
@@ -237,24 +255,11 @@ static void render_load_texture_list(struct render_texture* textures, int max, c
 		ASSERT(index <= max);
 		struct render_texture* texture = &textures[index];
 
-		uint8_t* data;
-
 		strcpy(path, "gfx/");
 		strcat(path, *name);
 		strcat(path, ".png");
 
-		AZ(mud_load_png_paletted(path, &data, &texture->width, &texture->height));
-
-		int level = 0;
-		int border = 0;
-
-		glGenTextures(1, &texture->texture); CHKGL;
-		glBindTexture(GL_TEXTURE_2D, texture->texture); CHKGL;
-		glTexImage2D(GL_TEXTURE_2D, level, 1, texture->width, texture->height, border, GL_RED, GL_UNSIGNED_BYTE, data); CHKGL;
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); CHKGL;
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); CHKGL;
-
-		free(data);
+		render_load_texture(texture, path);
 
 		index++;
 	}
@@ -425,17 +430,6 @@ static void render_init_buffers(struct render* render)
 	size_t wall_index_data_sz = RENDER_BUFSZ * sizeof(uint32_t);
 	render->type0_index_data = malloc(wall_index_data_sz);
 	AN(render->type0_index_data);
-	int i = 0;
-	int offset = 0;
-	while (i < (RENDER_BUFSZ-6)) {
-		render->type0_index_data[i++] = offset + 0;
-		render->type0_index_data[i++] = offset + 1;
-		render->type0_index_data[i++] = offset + 2;
-		render->type0_index_data[i++] = offset + 0;
-		render->type0_index_data[i++] = offset + 2;
-		render->type0_index_data[i++] = offset + 3;
-		offset += 4;
-	}
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, wall_index_data_sz, render->type0_index_data, GL_STREAM_DRAW); CHKGL;
 
 	// step buffers
@@ -465,6 +459,10 @@ void render_init(struct render* render, SDL_Window* window)
 	render_init_shaders(render);
 	render_init_buffers(render);
 	render_init_tagstuff(render);
+
+	mud_load_msh("workbench/nomnom/nomnom-v2.msh", &render->nomnom_msh);
+	render_load_texture(&render->nomnom_texture, "workbench/nomnom/x.png");
+	//printf("%dx%d\n", render->nomnom_texture.width, render->nomnom_texture.height);
 }
 
 void render_set_entity_cam(struct render* render, struct lvl_entity* entity)
@@ -650,6 +648,37 @@ static void yield_flats(struct render* render, struct lvl* lvl)
 	}
 }
 
+static void render_add_type0_vertex(struct render* render, float x, float y, float z, float u, float v, float ll)
+{
+	ASSERT(render->type0_vertex_n < RENDER_BUFSZ);
+	float* data = &render->type0_vertex_data[render->type0_vertex_n * FLOATS_PER_TYPE0_VERTEX];
+	int i = 0;
+	data[i++] = x;
+	data[i++] = y;
+	data[i++] = z;
+	data[i++] = u;
+	data[i++] = v;
+	data[i++] = ll;
+	render->type0_vertex_n++;
+}
+
+static void render_add_type0_index(struct render* render, int32_t index)
+{
+	ASSERT(render->type0_index_n < RENDER_BUFSZ);
+	render->type0_index_data[render->type0_index_n++] = index;
+}
+
+static void render_add_type0_quad(struct render* render)
+{
+	int offset = render->type0_vertex_n;
+	render_add_type0_index(render, offset + 0);
+	render_add_type0_index(render, offset + 1);
+	render_add_type0_index(render, offset + 2);
+	render_add_type0_index(render, offset + 0);
+	render_add_type0_index(render, offset + 2);
+	render_add_type0_index(render, offset + 3);
+}
+
 static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sectori, int contouri, int dz)
 {
 	struct lvl_sector* sector = lvl_get_sector(lvl, sectori);
@@ -664,6 +693,7 @@ static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sec
 	int texture = sd->texture[dz <= 0 ? 0 : 1];
 	if (texture == render->wall_current_texture) {
 		render->wall_enable = 1;
+		render_add_type0_quad(render);
 	} else {
 		render->wall_enable = 0;
 	}
@@ -673,19 +703,6 @@ static void renderctx_begin_wall(struct render* render, struct lvl* lvl, int sec
 	}
 }
 
-static void render_add_type0_vertex(struct render* render, float x, float y, float z, float u, float v, float ll)
-{
-	ASSERT(render->type0_vertex_n < RENDER_BUFSZ);
-	float* data = &render->type0_vertex_data[render->type0_vertex_n * FLOATS_PER_TYPE0_VERTEX];
-	int i = 0;
-	data[i++] = x;
-	data[i++] = y;
-	data[i++] = z;
-	data[i++] = u;
-	data[i++] = v;
-	data[i++] = ll;
-	render->type0_vertex_n++;
-}
 
 static void renderctx_add_wall_vertex(struct render* render, float x, float y, float z, float u, float v)
 {
@@ -843,6 +860,7 @@ static void flush_type0_data(struct render* render)
 	glVertexAttribPointer(render->type0_a_light_level, 1, GL_FLOAT, GL_FALSE, sizeof(float) * FLOATS_PER_TYPE0_VERTEX, (char*)(sizeof(float)*5)); CHKGL;
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, render->type0_index_buffer); CHKGL;
+	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, render->type0_index_n * sizeof(int32_t), render->type0_index_data); CHKGL;
 	glDrawElements(GL_TRIANGLES, render->type0_vertex_n/4*6, GL_UNSIGNED_INT, NULL); CHKGL;
 }
 
@@ -864,6 +882,7 @@ static void render_walls(struct render* render, struct lvl* lvl)
 
 	do {
 		render->type0_vertex_n = 0;
+		render->type0_index_n = 0;
 		render->wall_current_texture = render->wall_next_texture;
 		render->wall_next_texture = -1;
 
@@ -1067,13 +1086,15 @@ static void render_lvl_entities(struct render* render, struct lvl* lvl)
 	int current_texture;
 
 	// (FIXME maybe sprites ought to be atlas based?)
+	int nomnom_type = names_find_entity_type("nomnom");
 	do {
 		render->type0_vertex_n = 0;
+		render->type0_index_n = 0;
 		current_texture = next_texture;
 		next_texture = -1;
 		for (int i = 0; i < lvl->n_entities; i++) {
 			struct lvl_entity* e = lvl_get_entity(lvl, i);
-			if (e->type == ENTITY_DELETED) continue;
+			if (e->type == ENTITY_DELETED || e->type == nomnom_type) continue;
 
 			int texture = 0; // XXX TODO FIXME who knows this?
 
@@ -1099,6 +1120,8 @@ static void render_lvl_entities(struct render* render, struct lvl* lvl)
 				struct vec2 p1;
 				vec2_copy(&p1, p);
 				vec2_add_scalei(&p1, &ivn, 1.0);
+
+				render_add_type0_quad(render);
 
 				render_add_type0_vertex(
 					render,
@@ -1158,6 +1181,67 @@ static void render_lvl_entities(struct render* render, struct lvl* lvl)
 	glDisable(GL_TEXTURE_2D); CHKGL;
 }
 
+static void render_lvl_nomnom(struct render* render, struct lvl* lvl)
+{
+	shader_use(&render->type0_shader);
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glEnable(GL_TEXTURE_2D); CHKGL;
+
+	glDisable(GL_CULL_FACE);
+
+	glEnableVertexAttribArray(render->type0_a_pos); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_uv); CHKGL;
+	glEnableVertexAttribArray(render->type0_a_light_level); CHKGL;
+
+	glBindTexture(GL_TEXTURE_2D, render->nomnom_texture.texture); CHKGL;
+
+	int nomnom_type = names_find_entity_type("nomnom");
+	for (int i = 0; i < lvl->n_entities; i++) {
+		struct lvl_entity* e = lvl_get_entity(lvl, i);
+		if (e->type != nomnom_type) continue;
+		struct lvl_sector* sector = lvl_get_sector(lvl, e->sector);
+		float ll = sector->light_level;
+
+		glMatrixMode(GL_MODELVIEW); CHKGL;
+		glPushMatrix();
+		glTranslatef(e->position.s[0], e->z - MAGIC_EVEN_MORE_MAGIC_ENTITY_HEIGHT, e->position.s[1]);
+		glRotatef(-e->yaw+180, 0, 1, 0);
+
+		render->type0_vertex_n = 0;
+		render->type0_index_n = 0;
+
+		for (int j = 0; j < render->nomnom_msh.n_vertices; j++) {
+			render_add_type0_vertex(
+				render,
+				render->nomnom_msh.vertices[j*5+0],
+				render->nomnom_msh.vertices[j*5+1],
+				render->nomnom_msh.vertices[j*5+2],
+				render->nomnom_msh.vertices[j*5+3],
+				1-render->nomnom_msh.vertices[j*5+4], // XXX it's my loader that is broken!
+				ll
+			);
+		}
+
+		for (int j = 0; j < render->nomnom_msh.n_indices; j++) {
+			render_add_type0_index(render, render->nomnom_msh.indices[j]);
+		}
+		flush_type0_data(render);
+
+		glPopMatrix();
+	}
+
+
+	glDisableVertexAttribArray(render->type0_a_light_level); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_uv); CHKGL;
+	glDisableVertexAttribArray(render->type0_a_pos); CHKGL;
+
+	glActiveTexture(GL_TEXTURE0); CHKGL;
+	glDisable(GL_TEXTURE_2D); CHKGL;
+
+	glEnable(GL_CULL_FACE);
+}
+
 void render_lvl(struct render* render, struct lvl* lvl)
 {
 	gl_transform(render);
@@ -1173,6 +1257,7 @@ void render_lvl(struct render* render, struct lvl* lvl)
 
 	render_lvl_geom(render, lvl);
 	render_lvl_entities(render, lvl);
+	render_lvl_nomnom(render, lvl);
 }
 
 void render_flip(struct render* render)

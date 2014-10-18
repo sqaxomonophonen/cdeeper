@@ -5,6 +5,7 @@
 
 #include "shader.h"
 #include "lvl.h"
+#include "mud.h"
 
 #define MAX_WALLS (1024)
 #define MAX_SPRITES (4096)
@@ -45,6 +46,7 @@ struct render {
 	float* type0_vertex_data;
 	int32_t* type0_index_data;
 	int type0_vertex_n;
+	int type0_index_n;
 
 	int wall_current_texture, wall_next_texture;
 	int wall_enable;
@@ -103,6 +105,9 @@ struct render {
 	int tags_flat_vertex_n;
 	int* tags_flat_indices;
 	int tags_flat_index_n;
+
+	struct msh nomnom_msh;
+	struct render_texture nomnom_texture;
 };
 
 

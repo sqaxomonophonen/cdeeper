@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "magic.h"
 #include "mud.h"
@@ -26,7 +27,9 @@ int main(int argc, char** argv)
 			struct vec3 target;
 			vec3_set8(&target, palette[c0*3], palette[c0*3+1], palette[c0*3+2]);
 			if (c0 < (256-16)) {
-				vec3_scalei(&target, (float)lvl/(float)MAGIC_NUM_LIGHT_LEVELS);
+				float t = (float)lvl/(float)(MAGIC_NUM_LIGHT_LEVELS-1);
+				float tt = powf(t, 1.4f);
+				vec3_scalei(&target, tt);
 			}
 			if (unicorns) vec3_rgb2unicorns(&target);
 			int best_match = -1;

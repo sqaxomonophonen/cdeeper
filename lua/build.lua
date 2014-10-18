@@ -176,7 +176,7 @@ return function (plan_id)
 				end
 				for _,entity in ipairs(brick.entities) do
 					entity.position = tx:homogeneous_apply(entity.position)
-					-- TODO entity rotation transform
+					entity.yaw = entity.yaw + tx:homogeneous_calculate_rotation()
 					table.insert(self.entities, entity)
 				end
 				-- (NOTE first sidedef is left, second is right)
