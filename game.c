@@ -20,11 +20,11 @@ int main(int argc, char** argv)
 	SAZ(SDL_Init(SDL_INIT_VIDEO));
 	atexit(SDL_Quit);
 
-	int bitmask = SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_OPENGL;
+	int bitmask = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
 	SDL_Window* window = SDL_CreateWindow(
 		"deeper",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-		0, 0,
+		192, 108,
 		bitmask);
 	SAN(window);
 
